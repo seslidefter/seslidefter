@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { checkMonthlyTransactionLimit, FREE_LIMITS } from "@/lib/plan-limits";
 import { calculateNextBalanceAfterTransaction } from "@/lib/transaction-balance";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useTransactionStore } from "@/store/transactionStore";
 
 export interface PaymentPlan {
@@ -57,6 +58,7 @@ function urgencyColor(days: number): string {
 }
 
 export function OdemelerPageClient() {
+  const { t } = useLanguage();
   const [plans, setPlans] = useState<PaymentPlan[]>([]);
   const [payments, setPayments] = useState<PlanPayment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,6 +180,7 @@ export function OdemelerPageClient() {
       category_tag: "odeme_plani",
       balance_after,
       is_paid: true,
+      plan_id: plan.id,
     });
 
     if (txIns) {
@@ -203,36 +206,57 @@ export function OdemelerPageClient() {
       })
       .eq("id", plan.id);
 
-    toast.success("✅ Taksit ödendi ve kayıt eklendi!");
+    toast.success(t("payments.paidAndRecorded"));
     void loadData();
     void refreshPlan();
     void fetchAllTx();
   };
 
   async function deletePlan(planId: string) {
-    if (!confirm("Bu ödeme planını silmek istediğinizden emin misiniz?")) return;
+    if (!confirm(t("payments.deletePlanConfirm"))) return;
     const supabase = createClient();
-    const { error: txDel } = await supabase.from("transactions").delete().eq("plan_id", planId);
-    if (txDel) {
-      toast.error("İlişkili kayıt silinemedi: " + txDel.message);
-      return;
+    try {
+      const { error: paymentsError } = await supabase
+        .from("payment_plan_payments")
+        .delete()
+        .eq("plan_id", planId);
+
+      if (paymentsError) {
+        console.error("Payments silme hatası:", paymentsError);
+      }
+
+      const { error: txUpdErr } = await supabase
+        .from("transactions")
+        .update({ plan_id: null })
+        .eq("plan_id", planId);
+
+      if (txUpdErr) {
+        console.warn("plan_id güncellenemedi (kolon yok olabilir):", txUpdErr.message);
+      }
+
+      const { error: planError } = await supabase.from("payment_plans").delete().eq("id", planId);
+
+      if (planError) throw planError;
+
+      toast.success(t("payments.planDeletedToast"));
+      setSelectedPlan(null);
+      setEditPlan(null);
+      void loadData();
+      void refreshPlan();
+      void fetchAllTx();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`${t("payments.deleteFailed")} ${msg}`);
     }
-    const { error } = await supabase.from("payment_plans").delete().eq("id", planId);
-    if (error) {
-      toast.error("Silinemedi: " + error.message);
-      return;
-    }
-    toast.success("🗑️ Plan silindi");
-    setSelectedPlan(null);
-    setEditPlan(null);
-    void loadData();
-    void refreshPlan();
-    void fetchAllTx();
   }
 
   if (loading) {
     return (
-      <PageShell title="Ödemeler" contentClassName="flex flex-col gap-4 pb-28" titleClassName="hidden md:block">
+      <PageShell
+        title={t("payments.title")}
+        contentClassName="flex flex-col gap-4 pb-28"
+        titleClassName="hidden md:block"
+      >
         <Skeleton className="h-24 w-full rounded-2xl" />
         <Skeleton className="h-40 w-full rounded-2xl" />
       </PageShell>
@@ -240,41 +264,45 @@ export function OdemelerPageClient() {
   }
 
   return (
-    <PageShell title="Ödemeler" contentClassName="odemeler-page flex flex-col gap-4 pb-28" titleClassName="hidden md:block">
+    <PageShell
+      title={t("payments.title")}
+      contentClassName="odemeler-page flex flex-col gap-4 pb-28"
+      titleClassName="hidden md:block"
+    >
       {schemaError ? (
         <Card className="border-[var(--sd-gider)] p-4 text-sm text-[var(--text-primary)]">
-          <p className="font-bold">Ödeme planları tabloları yüklenemedi.</p>
+          <p className="font-bold">{t("payments.schemaLoadError")}</p>
           <p className="mt-2 text-[var(--text-secondary)]">{schemaError}</p>
-          <p className="mt-2 text-xs text-[var(--text-secondary)]">
-            Supabase SQL Editor&apos;da şema migration&apos;ını çalıştırdığınızdan emin olun.
-          </p>
+          <p className="mt-2 text-xs text-[var(--text-secondary)]">{t("payments.schemaHint")}</p>
         </Card>
       ) : null}
 
       <div className="page-header flex flex-wrap items-center justify-between gap-3">
-        <h1 className="page-title sd-heading text-xl text-[var(--text-primary)]">💳 Ödeme planları</h1>
+        <h1 className="page-title sd-heading text-xl text-[var(--text-primary)]">
+          {t("payments.pageHeading")}
+        </h1>
         <Button type="button" onClick={() => setShowAddModal(true)} className="shrink-0">
-          + Yeni plan
+          {t("payments.newPlan")}
         </Button>
       </div>
 
       <div className="payment-summary">
         <div className="summary-item">
-          <span className="summary-label">Toplam borç</span>
+          <span className="summary-label">{t("payments.totalDebt")}</span>
           <span className="summary-value">₺{summary.totalDebt.toLocaleString("tr-TR")}</span>
         </div>
         <div className="summary-item green">
-          <span className="summary-label">Ödenen</span>
+          <span className="summary-label">{t("payments.paid")}</span>
           <span className="summary-value">₺{summary.totalPaid.toLocaleString("tr-TR")}</span>
         </div>
         <div className="summary-item red">
-          <span className="summary-label">Kalan</span>
+          <span className="summary-label">{t("payments.remaining")}</span>
           <span className="summary-value">
             ₺{(summary.totalDebt - summary.totalPaid).toLocaleString("tr-TR")}
           </span>
         </div>
         <div className="summary-item orange">
-          <span className="summary-label">Bu ay</span>
+          <span className="summary-label">{t("payments.thisMonth")}</span>
           <span className="summary-value">₺{summary.thisMonthDue.toLocaleString("tr-TR")}</span>
         </div>
       </div>
@@ -282,7 +310,7 @@ export function OdemelerPageClient() {
       {upcomingPayments.length > 0 ? (
         <div className="upcoming-section">
           <h2 className="section-title sd-heading text-base text-[var(--text-primary)]">
-            ⏰ Yaklaşan ödemeler
+            ⏰ {t("payments.upcoming")}
           </h2>
           {upcomingPayments.map((payment) => {
             const plan = plans.find((p) => p.id === payment.plan_id);
@@ -299,15 +327,18 @@ export function OdemelerPageClient() {
                   <div className="min-w-0">
                     <div className="upcoming-title text-[var(--text-primary)]">{plan?.title}</div>
                     <div className="upcoming-meta">
-                      Taksit {payment.installment_number}/{plan?.installment_count} •{" "}
-                      {new Date(payment.due_date + "T12:00:00").toLocaleDateString("tr-TR")}
+                      {t("payments.installmentLine", {
+                        current: payment.installment_number,
+                        total: plan?.installment_count ?? 0,
+                      })}{" "}
+                      • {new Date(payment.due_date + "T12:00:00").toLocaleDateString("tr-TR")}
                     </div>
                     <div className="upcoming-days" style={{ color: col }}>
                       {days === 0
-                        ? "⚠️ Bugün!"
+                        ? `⚠️ ${t("payments.today")}`
                         : days < 0
-                          ? `⛔ ${Math.abs(days)} gün gecikti!`
-                          : `${days} gün kaldı`}
+                          ? `⛔ ${t("payments.overdue", { days: Math.abs(days) })}`
+                          : t("payments.daysLeft", { days })}
                     </div>
                   </div>
                 </div>
@@ -326,7 +357,9 @@ export function OdemelerPageClient() {
       ) : null}
 
       <div className="plans-section">
-        <h2 className="section-title sd-heading text-base text-[var(--text-primary)]">📋 Tüm planlar</h2>
+        <h2 className="section-title sd-heading text-base text-[var(--text-primary)]">
+          📋 {t("payments.allPlans")}
+        </h2>
         {plans.map((plan) => {
           const progress =
             plan.installment_count > 0 ? (plan.paid_count / plan.installment_count) * 100 : 0;
@@ -360,25 +393,28 @@ export function OdemelerPageClient() {
                   />
                 </div>
                 <span className="plan-progress-text shrink-0 text-xs text-[var(--text-secondary)]">
-                  {plan.paid_count}/{plan.installment_count} taksit
+                  {t("payments.progressTaksit", {
+                    paid: plan.paid_count,
+                    total: plan.installment_count,
+                  })}
                 </span>
               </div>
 
               <div className="plan-stats">
                 <div className="plan-stat">
-                  <span className="stat-label">Ödenen</span>
+                  <span className="stat-label">{t("payments.paid")}</span>
                   <span className="stat-value green">
                     ₺{Number(plan.paid_amount).toLocaleString("tr-TR")}
                   </span>
                 </div>
                 <div className="plan-stat">
-                  <span className="stat-label">Kalan</span>
+                  <span className="stat-label">{t("payments.remaining")}</span>
                   <span className="stat-value red">₺{remaining.toLocaleString("tr-TR")}</span>
                 </div>
                 <div className="plan-stat">
-                  <span className="stat-label">Kalan taksit</span>
+                  <span className="stat-label">{t("payments.remainingInstallLabel")}</span>
                   <span className="stat-value text-[var(--text-primary)]">
-                    {remainingInstallments} taksit
+                    {t("payments.remainingInstallmentsCount", { n: remainingInstallments })}
                   </span>
                 </div>
               </div>
@@ -386,7 +422,7 @@ export function OdemelerPageClient() {
               {nextPayment ? (
                 <div className="plan-next">
                   <span>
-                    📅 Sonraki:{" "}
+                    📅 {t("payments.nextPaymentPrefix")}{" "}
                     {new Date(nextPayment.due_date + "T12:00:00").toLocaleDateString("tr-TR", {
                       day: "numeric",
                       month: "long",
@@ -408,7 +444,7 @@ export function OdemelerPageClient() {
                   }}
                   className="flex-1 rounded-xl bg-blue-50 py-2 text-xs font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
                 >
-                  ✏️ Düzenle
+                  ✏️ {t("payments.edit")}
                 </button>
                 <button
                   type="button"
@@ -418,7 +454,7 @@ export function OdemelerPageClient() {
                   }}
                   className="flex-1 rounded-xl bg-red-50 py-2 text-xs font-bold text-red-500 dark:bg-red-900/30"
                 >
-                  🗑️ Sil
+                  🗑️ {t("payments.delete")}
                 </button>
               </div>
             </div>
@@ -428,9 +464,9 @@ export function OdemelerPageClient() {
         {plans.length === 0 && !schemaError ? (
           <div className="empty-state flex flex-col items-center gap-3 rounded-2xl border border-dashed border-[var(--border-color)] py-14">
             <span className="empty-icon text-5xl">💳</span>
-            <p className="text-[var(--text-secondary)]">Henüz ödeme planı yok</p>
+            <p className="text-[var(--text-secondary)]">{t("payments.noPlan")}</p>
             <Button type="button" onClick={() => setShowAddModal(true)}>
-              İlk planı ekle
+              {t("payments.firstPlanButton")}
             </Button>
           </div>
         ) : null}
@@ -438,6 +474,7 @@ export function OdemelerPageClient() {
 
       {showAddModal ? (
         <AddPlanModal
+          t={t}
           planData={planData}
           onClose={() => setShowAddModal(false)}
           onSave={() => {
@@ -450,6 +487,7 @@ export function OdemelerPageClient() {
 
       {editPlan ? (
         <EditPlanModal
+          t={t}
           plan={editPlan}
           onClose={() => setEditPlan(null)}
           onSave={() => {
@@ -463,6 +501,7 @@ export function OdemelerPageClient() {
 
       {selectedPlan ? (
         <PlanDetailModal
+          t={t}
           plan={selectedPlan}
           payments={payments.filter((p) => p.plan_id === selectedPlan.id)}
           onClose={() => setSelectedPlan(null)}
@@ -473,11 +512,15 @@ export function OdemelerPageClient() {
   );
 }
 
+type TFn = (key: string, params?: Record<string, string | number>) => string;
+
 function AddPlanModal({
+  t,
   onClose,
   onSave,
   planData,
 }: {
+  t: TFn;
   onClose: () => void;
   onSave: () => void;
   planData: PlanLimits | null;
@@ -624,7 +667,7 @@ function AddPlanModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">💳 Yeni ödeme planı</h2>
+          <h2 className="text-lg font-bold text-[var(--text-primary)]">{t("payments.newPlanModalTitle")}</h2>
           <button type="button" className="text-xl text-[var(--text-secondary)]" onClick={onClose}>
             ✕
           </button>
@@ -731,10 +774,10 @@ function AddPlanModal({
 
         <div className="modal-footer mt-4 flex gap-2">
           <Button type="button" variant="outline" fullWidth onClick={onClose}>
-            İptal
+            {t("common.cancel")}
           </Button>
           <Button type="button" fullWidth onClick={() => void handleSave()}>
-            💳 Plan oluştur
+            {t("payments.createPlan")}
           </Button>
         </div>
       </div>
@@ -743,10 +786,12 @@ function AddPlanModal({
 }
 
 function EditPlanModal({
+  t,
   plan,
   onClose,
   onSave,
 }: {
+  t: TFn;
   plan: PaymentPlan;
   onClose: () => void;
   onSave: () => void;
@@ -793,7 +838,7 @@ function EditPlanModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">✏️ Planı düzenle</h2>
+          <h2 className="text-lg font-bold text-[var(--text-primary)]">{t("payments.editPlanTitle")}</h2>
           <button type="button" className="text-xl text-[var(--text-secondary)]" onClick={onClose}>
             ✕
           </button>
@@ -842,10 +887,10 @@ function EditPlanModal({
         </div>
         <div className="modal-footer mt-4 flex gap-2">
           <Button type="button" variant="outline" fullWidth onClick={onClose}>
-            İptal
+            {t("common.cancel")}
           </Button>
           <Button type="button" fullWidth onClick={() => void handleSave()}>
-            Kaydet
+            {t("common.save")}
           </Button>
         </div>
       </div>
@@ -854,11 +899,13 @@ function EditPlanModal({
 }
 
 function PlanDetailModal({
+  t,
   plan,
   payments,
   onClose,
   onPaid,
 }: {
+  t: TFn;
   plan: PaymentPlan;
   payments: PlanPayment[];
   onClose: () => void;
@@ -897,13 +944,13 @@ function PlanDetailModal({
           </div>
           <div className="detail-stats mt-2 flex flex-wrap justify-between gap-2 text-sm text-[var(--text-secondary)]">
             <span>
-              Ödenen:{" "}
+              {t("payments.detailPaid")}{" "}
               <strong className="text-[var(--text-primary)]">
                 ₺{Number(plan.paid_amount).toLocaleString("tr-TR")}
               </strong>
             </span>
             <span>
-              Kalan:{" "}
+              {t("payments.detailRemaining")}{" "}
               <strong className="text-[var(--text-primary)]">
                 ₺{(Number(plan.total_amount) - Number(plan.paid_amount)).toLocaleString("tr-TR")}
               </strong>
@@ -921,7 +968,8 @@ function PlanDetailModal({
               )}
             >
               <div className="installment-num font-semibold text-[var(--text-primary)]">
-                {payment.is_paid ? "✅" : "⬜"} {payment.installment_number}. taksit
+                {payment.is_paid ? "✅" : "⬜"}{" "}
+                {t("payments.installmentN", { n: payment.installment_number })}
               </div>
               <div className="installment-date text-[var(--text-secondary)]">
                 {new Date(payment.due_date + "T12:00:00").toLocaleDateString("tr-TR", {
@@ -935,7 +983,7 @@ function PlanDetailModal({
               </div>
               {!payment.is_paid ? (
                 <button type="button" className="btn-small-paid" onClick={() => onPaid(payment)}>
-                  Ödendi
+                  {t("payments.markPaidInstallment")}
                 </button>
               ) : payment.paid_date ? (
                 <span className="paid-date text-xs text-[#2e7d32]">

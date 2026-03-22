@@ -10,54 +10,76 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 
-async function applyInviteBonus(
+async function processInviteCode(
   supabase: ReturnType<typeof createClient>,
+  rawCode: string | null | undefined,
   newUserId: string,
-  rawCode: string | null | undefined
+  successMessage: string
 ) {
-  const code = rawCode?.trim().toUpperCase();
-  if (!code) return;
+  try {
+    const code = rawCode?.trim().toUpperCase();
+    if (!code) return;
 
-  const { data: inviter, error } = await supabase
-    .from("profiles")
-    .select("id, premium_until")
-    .eq("invite_code", code)
-    .neq("id", newUserId)
-    .maybeSingle();
+    const { data: inviter, error: findError } = await supabase
+      .from("profiles")
+      .select("id, premium_until, invite_count")
+      .eq("invite_code", code)
+      .maybeSingle();
 
-  if (error || !inviter) return;
+    if (findError || !inviter) {
+      console.log("Davet kodu bulunamadı:", code);
+      return;
+    }
 
-  const baseMs = inviter.premium_until ? new Date(inviter.premium_until).getTime() : Date.now();
-  const newPremium = new Date(Math.max(Date.now(), baseMs));
-  newPremium.setDate(newPremium.getDate() + 30);
+    if (inviter.id === newUserId) return;
 
-  const { error: upInv } = await supabase
-    .from("profiles")
-    .update({ premium_until: newPremium.toISOString() })
-    .eq("id", inviter.id);
+    const { error: updateNewUser } = await supabase
+      .from("profiles")
+      .update({ invited_by: inviter.id })
+      .eq("id", newUserId);
 
-  if (upInv) {
-    console.error(upInv);
-    return;
+    if (updateNewUser) {
+      console.error("Yeni kullanıcı güncellenemedi:", updateNewUser);
+      return;
+    }
+
+    const now = new Date();
+    const base =
+      inviter.premium_until && new Date(inviter.premium_until) > now
+        ? new Date(inviter.premium_until)
+        : now;
+    base.setDate(base.getDate() + 30);
+
+    const currentCount = inviter.invite_count ?? 0;
+
+    const { error: updateInviter } = await supabase
+      .from("profiles")
+      .update({
+        premium_until: base.toISOString(),
+        invite_count: currentCount + 1,
+      })
+      .eq("id", inviter.id);
+
+    if (updateInviter) {
+      console.error("Davet eden güncellenemedi:", updateInviter);
+      return;
+    }
+
+    const selfPremium = new Date();
+    selfPremium.setDate(selfPremium.getDate() + 30);
+    const { error: selfPremErr } = await supabase
+      .from("profiles")
+      .update({ premium_until: selfPremium.toISOString() })
+      .eq("id", newUserId);
+    if (selfPremErr) {
+      console.error("Davet alan premium güncellenemedi:", selfPremErr);
+    }
+
+    console.log("✅ Davet kodu başarıyla işlendi:", code);
+    toast.success(successMessage);
+  } catch (e) {
+    console.error("Davet kodu işleme hatası:", e);
   }
-
-  const selfPremium = new Date();
-  selfPremium.setDate(selfPremium.getDate() + 30);
-
-  const { error: upSelf } = await supabase
-    .from("profiles")
-    .update({
-      invited_by: inviter.id,
-      premium_until: selfPremium.toISOString(),
-    })
-    .eq("id", newUserId);
-
-  if (upSelf) {
-    console.error(upSelf);
-    return;
-  }
-
-  toast.success("🎁 Davet bonusu uygulandı!");
 }
 
 function getPasswordStrength(password: string): number {
@@ -237,7 +259,7 @@ export function RegisterForm() {
 
       const code = form.inviteCode.trim() || searchParams.get("ref")?.trim();
       if (code && data.session) {
-        await applyInviteBonus(supabase, userId, code);
+        await processInviteCode(supabase, code, userId, t("auth.inviteBonusBoth"));
       }
 
       toast.success(data.session ? "✅ Kayıt başarılı! Giriş yapılıyor..." : "✅ Kayıt alındı — e-postanızı doğrulayın.");

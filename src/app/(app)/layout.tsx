@@ -17,7 +17,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Sidebar />
       <div className="flex min-h-full min-w-0 flex-1 flex-col pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0">
         <Header />
-        <main className="flex-1 w-full min-w-0 px-4 py-4 md:px-6 md:py-6">{children}</main>
+        <main className="page-container flex-1 w-full min-w-0 px-4 py-4 md:px-6 md:py-6">
+          {children}
+        </main>
       </div>
       <MobileNav />
       <AIAssistant />

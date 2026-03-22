@@ -25,6 +25,7 @@ type CalDay =
   | {
       key: string;
       num: number;
+      dayOfWeek: number;
       data?: { income: number; expense: number; count: number };
       isToday: boolean;
       isSelected: boolean;
@@ -62,19 +63,23 @@ export function MiniCalendar({
   const calendarDays = useMemo((): CalDay[] => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
+    const firstDayOfMonth = new Date(year, month, 1);
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const startOffset = firstDay === 0 ? 6 : firstDay - 1;
+
+    let startOffset = firstDayOfMonth.getDay() - 1;
+    if (startOffset < 0) startOffset = 6;
 
     const days: CalDay[] = [];
     for (let i = 0; i < startOffset; i++) {
       days.push(null);
     }
     for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month, d);
       const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       days.push({
         key,
         num: d,
+        dayOfWeek: date.getDay(), // used for future locale-specific layout
         data: calData[key],
         isToday: key === today,
         isSelected: key === selectedDate,
@@ -149,7 +154,7 @@ export function MiniCalendar({
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-0.5 px-3 pb-3">
+      <div className="grid grid-cols-7 gap-1 p-3">
         {calendarDays.map((day, i) => {
           if (!day) {
             return <div key={`empty-${i}`} className="aspect-square" />;
@@ -167,16 +172,16 @@ export function MiniCalendar({
               className={[
                 "relative flex aspect-square flex-col items-center justify-center rounded-xl text-xs font-semibold transition-all",
                 day.isSelected
-                  ? "bg-green-600 text-white shadow-lg shadow-green-500/30"
+                  ? "bg-green-600 text-white shadow-md"
                   : day.isToday
-                    ? "bg-green-100 text-green-700 ring-2 ring-green-500 ring-offset-1 dark:bg-green-900/40 dark:text-green-400"
+                    ? "bg-green-100 text-green-700 ring-2 ring-green-500 dark:bg-green-900/40 dark:text-green-300"
                     : hasData
-                      ? "bg-gray-50 text-gray-900 hover:bg-gray-100 dark:bg-gray-700/50 dark:text-white dark:hover:bg-gray-700"
-                      : "text-gray-400 hover:bg-gray-50 dark:text-gray-500 dark:hover:bg-gray-700/30",
+                      ? "bg-gray-50 text-gray-900 hover:bg-green-50 dark:bg-gray-700/50 dark:text-white dark:hover:bg-gray-700/50"
+                      : "text-gray-500 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-700/30",
               ].join(" ")}
             >
               <span
-                className={`text-sm leading-none ${day.isToday && !day.isSelected ? "font-black" : "font-semibold"}`}
+                className={`leading-none ${day.isToday ? "text-sm font-black" : "text-sm font-semibold"}`}
               >
                 {day.num}
               </span>
@@ -184,7 +189,7 @@ export function MiniCalendar({
                 <div className="mt-0.5 flex gap-0.5">
                   {hasIncome ? (
                     <span
-                      className={`h-1 w-1 rounded-full ${day.isSelected ? "bg-white/80" : "bg-green-500"}`}
+                      className={`h-1 w-1 rounded-full ${day.isSelected ? "bg-white" : "bg-green-500"}`}
                     />
                   ) : null}
                   {hasExpense ? (

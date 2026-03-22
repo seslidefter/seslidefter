@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { errToast } from "@/lib/sd-toast";
 import { tagColorFor } from "@/lib/tag-display";
 import { formatTry } from "@/lib/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuthStore } from "@/store/authStore";
 import { useTransactionStore } from "@/store/transactionStore";
 import { AlacakVerecekBar, GelirGiderArea, type AvPoint, type TrendPoint } from "./charts";
@@ -56,25 +57,30 @@ function inRange(iso: string, start: Date, end: Date) {
   return t >= start.getTime() && t <= end.getTime();
 }
 
-const PERIOD_BTN: { id: Period; label: string }[] = [
-  { id: "week", label: "Bu Hafta" },
-  { id: "month", label: "Bu Ay" },
-  { id: "3m", label: "3 Ay" },
-  { id: "6m", label: "6 Ay" },
-  { id: "year", label: "Bu Yıl" },
-];
-
 function monthKey(iso: string) {
   const d = new Date(iso + "T12:00:00");
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export function RaporPageClient() {
+  const { t, language } = useLanguage();
+  const dateLocale = language === "en" ? "en-US" : "tr-TR";
   const initialized = useAuthStore((s) => s.initialized);
   const transactions = useTransactionStore((s) => s.transactions);
   const loading = useTransactionStore((s) => s.loading);
   const fetchAll = useTransactionStore((s) => s.fetchAll);
   const [period, setPeriod] = useState<Period>("month");
+
+  const PERIOD_BTN: { id: Period; label: string }[] = useMemo(
+    () => [
+      { id: "week", label: t("report.thisWeek") },
+      { id: "month", label: t("report.thisMonth") },
+      { id: "3m", label: t("report.threeMonths") },
+      { id: "6m", label: t("report.sixMonths") },
+      { id: "year", label: t("report.thisYear") },
+    ],
+    [t]
+  );
 
   const load = useCallback(() => {
     void fetchAll().then((r) => {
@@ -123,14 +129,14 @@ export function RaporPageClient() {
     }
     const keys = Array.from(map.keys()).sort();
     return keys.map((k) => ({
-      label: new Date(k + "T12:00:00").toLocaleDateString("tr-TR", {
+      label: new Date(k + "T12:00:00").toLocaleDateString(dateLocale, {
         day: "numeric",
         month: "short",
       }),
       gelir: map.get(k)!.gelir,
       gider: map.get(k)!.gider,
     }));
-  }, [filtered]);
+  }, [filtered, dateLocale]);
 
   const trendLast6Months: TrendMonthRow[] = useMemo(() => {
     const now = new Date();
@@ -139,7 +145,7 @@ export function RaporPageClient() {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const y = d.getFullYear();
       const m = d.getMonth();
-      const label = d.toLocaleDateString("tr-TR", { month: "short", year: "2-digit" });
+      const label = d.toLocaleDateString(dateLocale, { month: "short", year: "2-digit" });
       let gelir = 0;
       let gider = 0;
       for (const t of transactions) {
@@ -152,7 +158,7 @@ export function RaporPageClient() {
       rows.push({ label, gelir, gider, net: gelir - gider });
     }
     return rows;
-  }, [transactions]);
+  }, [transactions, dateLocale]);
 
   const categoryPieData: CategorySlice[] = useMemo(() => {
     const m = new Map<string, number>();
@@ -193,7 +199,7 @@ export function RaporPageClient() {
     return keys.map((k) => {
       const [y, mo] = k.split("-").map(Number);
       return {
-        label: new Date(y, mo - 1, 1).toLocaleDateString("tr-TR", {
+        label: new Date(y, mo - 1, 1).toLocaleDateString(dateLocale, {
           month: "short",
           year: "2-digit",
         }),
@@ -201,7 +207,7 @@ export function RaporPageClient() {
         verecek: map.get(k)!.verecek,
       };
     });
-  }, [filtered]);
+  }, [filtered, dateLocale]);
 
   const topAlacakByAmount = useMemo(() => {
     const m = new Map<string, number>();
@@ -256,19 +262,19 @@ export function RaporPageClient() {
     }
     return Object.entries(days).map(([date, amount]) => ({
       date,
-      day: new Date(date + "T12:00:00").toLocaleDateString("tr-TR", {
+      day: new Date(date + "T12:00:00").toLocaleDateString(dateLocale, {
         day: "numeric",
         month: "short",
       }),
       amount,
       count: transactions.filter((tr) => tr.date === date).length,
     }));
-  }, [transactions]);
+  }, [transactions, dateLocale]);
 
   if (!initialized || (loading && transactions.length === 0)) {
     return (
       <PageShell
-        title="Rapor"
+        title={t("report.title")}
         variant="narrow"
         contentClassName="flex flex-col gap-4"
         titleClassName="hidden md:block"
@@ -283,7 +289,7 @@ export function RaporPageClient() {
 
   return (
     <PageShell
-      title="Rapor"
+      title={t("report.title")}
       variant="narrow"
       contentClassName="flex flex-col gap-5 pb-6"
       titleClassName="hidden md:block"
@@ -312,13 +318,15 @@ export function RaporPageClient() {
       </div>
 
       <section className="space-y-2">
-        <h2 className="sd-heading text-lg text-[var(--text-primary)]">🧠 Akıllı analiz</h2>
+        <h2 className="sd-heading text-lg text-[var(--text-primary)]">{t("report.smartAnalysis")}</h2>
         <SmartPredictions transactions={transactions} />
       </section>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="p-4">
-          <p className="text-xs font-bold uppercase text-[var(--text-secondary)]">Toplam gelir</p>
+          <p className="text-xs font-bold uppercase text-[var(--text-secondary)]">
+            {t("report.totalIncome")}
+          </p>
           <p className="sd-num sd-heading mt-1 text-lg text-[var(--sd-gelir)]">
             {formatTry(summary.gelir)}
           </p>
@@ -330,11 +338,15 @@ export function RaporPageClient() {
           </p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs font-bold uppercase text-[var(--text-secondary)]">Net (gelir−gider)</p>
+          <p className="text-xs font-bold uppercase text-[var(--text-secondary)]">
+            {t("report.netDetail")}
+          </p>
           <p className="sd-num sd-heading mt-1 text-lg">{formatTry(summary.net)}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs font-bold uppercase text-[var(--text-secondary)]">Tasarruf oranı</p>
+          <p className="text-xs font-bold uppercase text-[var(--text-secondary)]">
+            {t("report.savingsRate")}
+          </p>
           <p className="sd-num sd-heading mt-1 text-lg text-[var(--sd-primary)]">
             %{summary.tasarruf}
           </p>
@@ -343,10 +355,10 @@ export function RaporPageClient() {
 
       <Card className="p-4">
         <h2 className="sd-heading mb-4 text-sm font-bold text-[var(--text-primary)]">
-          📊 Gelir / Gider / Net (son 6 ay)
+          {t("report.chartIncomeExpenseNet6m")}
         </h2>
         {!trendHasData ? (
-          <p className="text-sm text-[var(--text-secondary)]">Veri yok.</p>
+          <p className="text-sm text-[var(--text-secondary)]">{t("report.noData")}</p>
         ) : (
           <div className="h-[240px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
@@ -367,7 +379,11 @@ export function RaporPageClient() {
                   formatter={(value, name) => {
                     const n = typeof value === "number" ? value : Number(value);
                     const label =
-                      name === "gelir" ? "Gelir" : name === "gider" ? "Gider" : "Net";
+                      name === "gelir"
+                        ? t("report.legendGelir")
+                        : name === "gider"
+                          ? t("report.legendGider")
+                          : t("report.legendNet");
                     return [formatTry(Number.isFinite(n) ? n : 0), label];
                   }}
                   contentStyle={{
@@ -380,7 +396,11 @@ export function RaporPageClient() {
                 />
                 <Legend
                   formatter={(v) =>
-                    v === "gelir" ? "Gelir" : v === "gider" ? "Gider" : "Net"
+                    v === "gelir"
+                      ? t("report.legendGelir")
+                      : v === "gider"
+                        ? t("report.legendGider")
+                        : t("report.legendNet")
                   }
                 />
                 <Bar dataKey="gelir" fill="#2E7D32" radius={[4, 4, 0, 0]} maxBarSize={32} />
@@ -394,7 +414,7 @@ export function RaporPageClient() {
 
       <Card className="p-4">
         <h2 className="sd-heading mb-4 text-sm font-bold text-[var(--text-primary)]">
-          🔥 Son 30 gün işlem yoğunluğu
+          {t("report.intensityTitle")}
         </h2>
         <div className="h-[160px] w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%">
@@ -410,7 +430,7 @@ export function RaporPageClient() {
               <Tooltip
                 formatter={(value) => {
                   const n = typeof value === "number" ? value : Number(value);
-                  return [formatTry(Number.isFinite(n) ? n : 0), "Hacim"];
+                  return [formatTry(Number.isFinite(n) ? n : 0), t("report.volume")];
                 }}
                 contentStyle={{
                   borderRadius: 12,
@@ -435,7 +455,9 @@ export function RaporPageClient() {
                 className="flex items-center gap-1.5 rounded-lg bg-green-50 px-2.5 py-1.5 dark:bg-green-900/20"
               >
                 <span className="text-xs font-bold text-green-700 dark:text-green-400">{d.day}</span>
-                <span className="text-xs text-green-600 dark:text-green-500">{d.count} işlem</span>
+                <span className="text-xs text-green-600 dark:text-green-500">
+                  {t("report.transactionCount", { count: d.count })}
+                </span>
               </div>
             ))}
         </div>
@@ -451,27 +473,27 @@ export function RaporPageClient() {
       </Card>
 
       <Card className="p-4">
-        <h2 className="sd-heading mb-3 text-lg">Gelir vs gider (seçili dönem)</h2>
+        <h2 className="sd-heading mb-3 text-lg">{t("report.gelirVsGiderPeriod")}</h2>
         {areaData.length === 0 ? (
-          <p className="text-sm text-[var(--text-secondary)]">Veri yok.</p>
+          <p className="text-sm text-[var(--text-secondary)]">{t("report.noData")}</p>
         ) : (
           <GelirGiderArea data={areaData} />
         )}
       </Card>
 
       <Card className="p-4">
-        <h2 className="sd-heading mb-3 text-lg">Sektörel dağılım (gider)</h2>
+        <h2 className="sd-heading mb-3 text-lg">{t("report.sectoralGider")}</h2>
         {categoryPieData.length === 0 ? (
-          <p className="text-sm text-[var(--text-secondary)]">Bu dönemde etiketli gider yok.</p>
+          <p className="text-sm text-[var(--text-secondary)]">{t("report.noTaggedGider")}</p>
         ) : (
           <CategoryChart data={categoryPieData} />
         )}
       </Card>
 
       <Card className="p-4">
-        <h2 className="sd-heading mb-3 text-lg">En çok harcama (üst 5)</h2>
+        <h2 className="sd-heading mb-3 text-lg">{t("report.topSpend5")}</h2>
         {topGiderTags.length === 0 ? (
-          <p className="text-sm text-[var(--text-secondary)]">Veri yok.</p>
+          <p className="text-sm text-[var(--text-secondary)]">{t("report.noData")}</p>
         ) : (
           <ul className="space-y-3">
             {topGiderTags.map((row, i) => (
@@ -502,9 +524,9 @@ export function RaporPageClient() {
 
       <div className="grid gap-3 md:grid-cols-2">
         <Card className="p-4">
-          <h2 className="sd-heading mb-3 text-lg">En çok alacak (kişi)</h2>
+          <h2 className="sd-heading mb-3 text-lg">{t("report.topCreditPerson")}</h2>
           {topAlacakByAmount.length === 0 ? (
-            <p className="text-sm text-[var(--text-secondary)]">Veri yok.</p>
+            <p className="text-sm text-[var(--text-secondary)]">{t("report.noData")}</p>
           ) : (
             <ol className="space-y-2">
               {topAlacakByAmount.map(([name, sum], i) => (
@@ -522,9 +544,9 @@ export function RaporPageClient() {
           )}
         </Card>
         <Card className="p-4">
-          <h2 className="sd-heading mb-3 text-lg">En çok borç (kişi)</h2>
+          <h2 className="sd-heading mb-3 text-lg">{t("report.topDebtPerson")}</h2>
           {topVerecekByAmount.length === 0 ? (
-            <p className="text-sm text-[var(--text-secondary)]">Veri yok.</p>
+            <p className="text-sm text-[var(--text-secondary)]">{t("report.noData")}</p>
           ) : (
             <ol className="space-y-2">
               {topVerecekByAmount.map(([name, sum], i) => (
@@ -544,9 +566,9 @@ export function RaporPageClient() {
       </div>
 
       <Card className="p-4">
-        <h2 className="sd-heading mb-3 text-lg">Alacak vs borç (aylık)</h2>
+        <h2 className="sd-heading mb-3 text-lg">{t("report.creditVsDebtMonthly")}</h2>
         {barData.length === 0 ? (
-          <p className="text-sm text-[var(--text-secondary)]">Veri yok.</p>
+          <p className="text-sm text-[var(--text-secondary)]">{t("report.noData")}</p>
         ) : (
           <AlacakVerecekBar data={barData} />
         )}

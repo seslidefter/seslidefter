@@ -4,6 +4,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tagColorFor, tagIconFor } from "@/lib/tag-display";
 import { sendWhatsAppReminder } from "@/lib/whatsapp";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { cn, formatShortDate, formatTry, getCategoryLabel } from "@/lib/utils";
 import type { TransactionRow } from "@/types/database";
 
@@ -28,11 +29,12 @@ interface TransactionCardProps {
 const revealWidth = 112;
 
 export function TransactionCard({
-  transaction: t,
+  transaction: tx,
   onDelete,
   onEdit,
   showCreatedTime = false,
 }: TransactionCardProps) {
+  const { t } = useLanguage();
   const [dx, setDx] = useState(0);
   const startX = useRef(0);
   const baseDx = useRef(0);
@@ -41,20 +43,20 @@ export function TransactionCard({
     dxRef.current = dx;
   }, [dx]);
 
-  const { sign, color } = amountStyle(t);
+  const { sign, color } = amountStyle(tx);
   const kasaLabel =
-    t.balance_after != null && !Number.isNaN(t.balance_after)
-      ? `Kasa: ${formatTry(t.balance_after)}`
+    tx.balance_after != null && !Number.isNaN(tx.balance_after)
+      ? `Kasa: ${formatTry(tx.balance_after)}`
       : null;
 
   const title =
-    t.description?.trim() || t.transcript?.trim() || getCategoryLabel(t.category) || "İşlem";
-  const personLine = t.contacts?.name?.trim() || "—";
+    tx.description?.trim() || tx.transcript?.trim() || getCategoryLabel(tx.category) || "İşlem";
+  const personLine = tx.contacts?.name?.trim() || "—";
   const timeLine = showCreatedTime
-    ? new Date(t.created_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+    ? new Date(tx.created_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
     : null;
-  const icon = tagIconFor(t.category_tag);
-  const iconBg = tagColorFor(t.category_tag);
+  const icon = tagIconFor(tx.category_tag);
+  const iconBg = tagColorFor(tx.category_tag);
 
   const handleStart = useCallback((clientX: number) => {
     startX.current = clientX;
@@ -71,13 +73,10 @@ export function TransactionCard({
   }, []);
 
   const onDeleteClick = () => {
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm("Bu işlemi silmek istediğinizden emin misiniz?")
-    ) {
+    if (typeof window !== "undefined" && !window.confirm(t("transactions.deleteConfirm"))) {
       return;
     }
-    onDelete(t.id);
+    onDelete(tx.id);
     setDx(0);
   };
 
@@ -91,10 +90,10 @@ export function TransactionCard({
           type="button"
           className="flex flex-1 items-center justify-center bg-[var(--sd-primary)] text-white"
           onClick={() => {
-            onEdit(t);
+            onEdit(tx);
             setDx(0);
           }}
-          aria-label="Düzenle"
+          aria-label={t("common.edit")}
         >
           <Pencil className="h-5 w-5" />
         </button>
@@ -102,7 +101,7 @@ export function TransactionCard({
           type="button"
           className="flex flex-1 items-center justify-center bg-[var(--sd-gider)] text-white"
           onClick={onDeleteClick}
-          aria-label="Sil"
+          aria-label={t("common.delete")}
         >
           <Trash2 className="h-5 w-5" />
         </button>
@@ -123,25 +122,25 @@ export function TransactionCard({
         <div className="min-w-0 flex-1 py-0.5">
           <p className="line-clamp-2 text-sm font-bold text-[var(--sd-text)]">{title}</p>
           <p className="mt-0.5 text-[11px] font-semibold text-black/45 dark:text-white/45">
-            {personLine} · {formatShortDate(t.date)}
+            {personLine} · {formatShortDate(tx.date)}
             {timeLine ? ` · ${timeLine}` : ""}
           </p>
         </div>
         <div className="flex shrink-0 items-stretch gap-1">
-          {(t.category === "alacak" || t.category === "verecek") && t.contacts?.name ? (
+          {(tx.category === "alacak" || tx.category === "verecek") && tx.contacts?.name ? (
             <div className="flex flex-col justify-center">
               <button
                 type="button"
                 className="whatsapp-reminder-btn"
                 title="WhatsApp hatırlatma"
                 onClick={() => {
-                  const c = t.contacts!;
+                  const c = tx.contacts!;
                   sendWhatsAppReminder(
                     c.phone ?? "",
                     c.name,
-                    Math.abs(Number(t.amount)),
-                    t.category === "alacak" ? "alacak" : "verecek",
-                    t.due_date
+                    Math.abs(Number(tx.amount)),
+                    tx.category === "alacak" ? "alacak" : "verecek",
+                    tx.due_date
                   );
                 }}
               >
@@ -152,7 +151,7 @@ export function TransactionCard({
           <div className="flex flex-col items-end justify-center text-right">
             <p className="sd-num text-base font-extrabold leading-tight" style={{ color }}>
               {sign}
-              {formatTry(Math.abs(Number(t.amount)))}
+              {formatTry(Math.abs(Number(tx.amount)))}
             </p>
             {kasaLabel ? (
               <p className="mt-0.5 max-w-[7rem] truncate text-[10px] font-semibold text-black/40">
@@ -168,9 +167,9 @@ export function TransactionCard({
           >
             <button
               type="button"
-              onClick={() => onEdit(t)}
+              onClick={() => onEdit(tx)}
               className="rounded-lg p-2 text-[var(--sd-primary)] hover:bg-black/[0.05]"
-              aria-label="Düzenle"
+              aria-label={t("common.edit")}
             >
               <Pencil className="h-4 w-4" />
             </button>
@@ -178,7 +177,7 @@ export function TransactionCard({
               type="button"
               onClick={onDeleteClick}
               className="rounded-lg p-2 text-[var(--sd-gider)] hover:bg-black/[0.05]"
-              aria-label="Sil"
+              aria-label={t("common.delete")}
             >
               <Trash2 className="h-4 w-4" />
             </button>

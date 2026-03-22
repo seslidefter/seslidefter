@@ -10,18 +10,16 @@ import {
 } from "react";
 import trJson from "@/locales/tr.json";
 
-export type Language = "tr" | "en" | "ar";
+export type Language = "tr" | "en";
 
 type Messages = typeof trJson;
 
 async function loadTranslations(lang: Language): Promise<Messages> {
   switch (lang) {
     case "tr":
-      return trJson;
+      return (await import("@/locales/tr.json")).default as Messages;
     case "en":
       return (await import("@/locales/en.json")).default as Messages;
-    case "ar":
-      return (await import("@/locales/ar.json")).default as Messages;
     default:
       return trJson;
   }
@@ -43,9 +41,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const saved = localStorage.getItem("sd-language") as Language | null;
-    const lang =
-      saved && ["tr", "en", "ar"].includes(saved) ? saved : "tr";
+    const raw = localStorage.getItem("sd-language");
+    if (raw === "ar") {
+      localStorage.setItem("sd-language", "tr");
+    }
+    const lang: Language = raw === "en" ? "en" : "tr";
 
     void (async () => {
       const trans = await loadTranslations(lang);
@@ -53,7 +53,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       setLanguageState(lang);
       localStorage.setItem("sd-language", lang);
       document.documentElement.lang = lang;
-      document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+      document.documentElement.dir = "ltr";
     })();
   }, []);
 
@@ -65,7 +65,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       if (typeof window !== "undefined") {
         localStorage.setItem("sd-language", lang);
         document.documentElement.lang = lang;
-        document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+        document.documentElement.dir = "ltr";
       }
     })();
   }
@@ -99,8 +99,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         language,
         setLanguage,
         t,
-        isRTL: language === "ar",
-        dir: language === "ar" ? "rtl" : "ltr",
+        isRTL: false,
+        dir: "ltr",
       }}
     >
       {children}

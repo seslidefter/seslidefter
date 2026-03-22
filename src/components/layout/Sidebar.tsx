@@ -102,7 +102,7 @@ export function Sidebar() {
             onClick={() => void signOut().then(() => router.push("/login"))}
           >
             <LogOut className="h-4 w-4" strokeWidth={2.25} />
-            {t("auth.logout")}
+            {t("profile.logout")}
           </button>
         </div>
       </div>

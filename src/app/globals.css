@@ -2988,27 +2988,12 @@ nav,
   font-variant-numeric: tabular-nums;
 }
 
-/* RTL (Arabic) */
-[dir="rtl"] {
-  text-align: right;
+.page-container {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
-[dir="rtl"] .sidebar {
-  right: 0;
-  left: auto;
-  border-right: none;
-  border-left: 1px solid var(--border-color);
-}
-
-[dir="rtl"] .mobile-nav {
-  direction: rtl;
-}
-
-[dir="rtl"] .flex-row-reverse-rtl {
-  flex-direction: row-reverse;
-}
-
-[dir="rtl"] input,
-[dir="rtl"] textarea {
-  text-align: right;
+@media (min-width: 768px) {
+  .page-container {
+    padding-bottom: 0;
+  }
 }

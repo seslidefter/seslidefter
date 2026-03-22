@@ -101,7 +101,7 @@ function DashboardInner() {
     <PageShell variant="wide" contentClassName="relative flex flex-col gap-4 pb-28">
       <VoiceQuerySync />
 
-      <h1 className="sd-heading text-xl text-[var(--text-primary)] md:text-2xl">
+      <h1 className="text-xl font-bold text-[var(--text-primary)] md:text-2xl">
         {t("dashboard.greeting", { name: firstName })}
       </h1>
 

@@ -20,6 +20,7 @@ import type {
   TransactionCategory,
   TransactionRow,
 } from "@/types/database";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuthStore } from "@/store/authStore";
 import { useTransactionStore } from "@/store/transactionStore";
 
@@ -58,6 +59,7 @@ function DebtCreditRow({
   onMarkPaid: (id: string) => void;
   isLast?: boolean;
 }) {
+  const { t } = useLanguage();
   const contact = contacts.find((c) => c.id === tx.contact_id);
   const isAlacak = tx.category === "alacak";
 
@@ -73,10 +75,10 @@ function DebtCreditRow({
       />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold text-gray-900 dark:text-white">
-          {contact?.name || "Bilinmeyen"}
+          {contact?.name || t("debtCredit.unknownPerson")}
         </div>
         <div className="mt-0.5 truncate text-xs text-gray-500">
-          {tx.description || (isAlacak ? "Alacak" : "Borç")}
+          {tx.description || (isAlacak ? t("transactions.credit") : t("transactions.debt"))}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <span
@@ -86,7 +88,7 @@ function DebtCreditRow({
                 : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
             }`}
           >
-            {isAlacak ? "📥 Alacak" : "📤 Borç"}
+            {isAlacak ? t("debtCredit.rowCreditShort") : t("debtCredit.rowDebtShort")}
           </span>
           <span className="text-xs text-gray-400">
             {new Date(tx.date + "T12:00:00").toLocaleDateString("tr-TR", {
@@ -110,7 +112,7 @@ function DebtCreditRow({
           ₺{Number(tx.amount).toLocaleString("tr-TR", { minimumFractionDigits: 2 })}
         </div>
         <div className={`mt-0.5 text-xs ${tx.is_paid ? "text-green-600" : "text-gray-400"}`}>
-          {tx.is_paid ? "✅ Ödendi" : "⏳ Bekliyor"}
+          {tx.is_paid ? `✅ ${t("debtCredit.paid")}` : `⏳ ${t("debtCredit.pending")}`}
         </div>
       </div>
       <div className="flex shrink-0 gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
@@ -119,7 +121,7 @@ function DebtCreditRow({
             type="button"
             onClick={() => onMarkPaid(tx.id)}
             className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50 text-sm text-green-600 transition-all hover:bg-green-100 dark:bg-green-900/30 dark:hover:bg-green-900/50"
-            title="Ödendi"
+            title={t("debtCredit.markPaid")}
           >
             ✓
           </button>
@@ -128,7 +130,7 @@ function DebtCreditRow({
           type="button"
           onClick={() => onEdit(tx)}
           className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-sm text-blue-600 transition-all hover:bg-blue-100 dark:bg-blue-900/30"
-          title="Düzenle"
+          title={t("common.edit")}
         >
           ✏️
         </button>
@@ -136,7 +138,7 @@ function DebtCreditRow({
           type="button"
           onClick={() => onDelete(tx.id)}
           className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-sm text-red-500 transition-all hover:bg-red-100 dark:bg-red-900/30"
-          title="Sil"
+          title={t("common.delete")}
         >
           🗑️
         </button>
@@ -396,6 +398,7 @@ function EditDebtModal({
 }
 
 export default function AlacakVerecekPage() {
+  const { t } = useLanguage();
   const initialized = useAuthStore((s) => s.initialized);
   const transactions = useTransactionStore((s) => s.transactions);
   const contacts = useTransactionStore((s) => s.contacts);
@@ -430,7 +433,7 @@ export default function AlacakVerecekPage() {
 
   const handleDeleteDebtTx = useCallback(
     async (id: string) => {
-      if (!confirm("Bu kaydı silmek istediğinizden emin misiniz?")) return;
+      if (!confirm(t("debtCredit.deleteConfirm"))) return;
       const { error } = await deleteTransaction(id);
       if (error) {
         toast.error("Silinemedi: " + error);
@@ -439,7 +442,7 @@ export default function AlacakVerecekPage() {
       toast.success("🗑️ Kayıt silindi");
       load();
     },
-    [deleteTransaction, load]
+    [deleteTransaction, load, t]
   );
 
   const handleMarkPaid = useCallback(
@@ -744,7 +747,7 @@ export default function AlacakVerecekPage() {
   if (!initialized || (loading && contacts.length === 0)) {
     return (
       <PageShell
-        title="Alacak / Borç"
+        title={t("debtCredit.title")}
         contentClassName="flex flex-col gap-4"
         titleClassName="hidden md:block"
       >
@@ -759,39 +762,43 @@ export default function AlacakVerecekPage() {
 
   return (
     <PageShell
-      title="Alacak / Borç"
+      title={t("debtCredit.title")}
       contentClassName="mx-auto w-full max-w-4xl flex flex-col gap-4 px-4 py-5 pb-28"
       titleClassName="hidden md:block"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-black text-gray-900 dark:text-white">Alacak / Borç</h1>
+        <h1 className="text-xl font-black text-gray-900 dark:text-white">{t("debtCredit.title")}</h1>
         <div className="flex gap-2">
           <button
             type="button"
             onClick={() => openDebt("alacak")}
             className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white"
           >
-            + Alacak
+            {t("debtCredit.addCredit")}
           </button>
           <button
             type="button"
             onClick={() => openDebt("verecek")}
             className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white"
           >
-            + Borç
+            {t("debtCredit.addDebt")}
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
-          <div className="mb-1 text-xs font-bold uppercase text-blue-600 dark:text-blue-400">Toplam alacak</div>
+          <div className="mb-1 text-xs font-bold uppercase text-blue-600 dark:text-blue-400">
+            {t("debtCredit.totalCredit")}
+          </div>
           <div className="text-2xl font-black text-blue-700 dark:text-blue-300">
             ₺{totals.al.toLocaleString("tr-TR")}
           </div>
         </div>
         <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-900/20">
-          <div className="mb-1 text-xs font-bold uppercase text-orange-600 dark:text-orange-400">Toplam borç</div>
+          <div className="mb-1 text-xs font-bold uppercase text-orange-600 dark:text-orange-400">
+            {t("debtCredit.totalDebt")}
+          </div>
           <div className="text-2xl font-black text-orange-700 dark:text-orange-300">
             ₺{totals.ve.toLocaleString("tr-TR")}
           </div>
@@ -820,7 +827,7 @@ export default function AlacakVerecekPage() {
       <div className="mb-6">
         <div className="mb-3 flex items-center gap-2">
           <div className="h-3 w-3 rounded-full bg-blue-500" />
-          <h2 className="text-base font-bold text-gray-900 dark:text-white">Alacaklar</h2>
+          <h2 className="text-base font-bold text-gray-900 dark:text-white">{t("debtCredit.credits")}</h2>
           <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
             {creditTransactions.length}
           </span>
@@ -828,7 +835,7 @@ export default function AlacakVerecekPage() {
         {creditTransactions.length === 0 ? (
           <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
             <div className="mb-2 text-3xl">📥</div>
-            <p className="text-sm text-gray-400">Henüz alacak yok</p>
+            <p className="text-sm text-gray-400">{t("debtCredit.noCredit")}</p>
           </div>
         ) : (
           <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
@@ -850,7 +857,7 @@ export default function AlacakVerecekPage() {
       <div>
         <div className="mb-3 flex items-center gap-2">
           <div className="h-3 w-3 rounded-full bg-orange-500" />
-          <h2 className="text-base font-bold text-gray-900 dark:text-white">Borçlar</h2>
+          <h2 className="text-base font-bold text-gray-900 dark:text-white">{t("debtCredit.debts")}</h2>
           <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-700 dark:bg-orange-900/40 dark:text-orange-400">
             {debtTransactions.length}
           </span>
@@ -858,7 +865,7 @@ export default function AlacakVerecekPage() {
         {debtTransactions.length === 0 ? (
           <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
             <div className="mb-2 text-3xl">📤</div>
-            <p className="text-sm text-gray-400">Henüz borç yok</p>
+            <p className="text-sm text-gray-400">{t("debtCredit.noDebt")}</p>
           </div>
         ) : (
           <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
@@ -918,14 +925,14 @@ export default function AlacakVerecekPage() {
       <Modal
         open={debtModal != null}
         onClose={() => setDebtModal(null)}
-        title={debtModal === "alacak" ? "Alacak ekle" : "Borç ekle"}
+        title={debtModal === "alacak" ? t("debtCredit.addCreditTitle") : t("debtCredit.addDebtTitle")}
         footer={
           <>
             <Button type="button" variant="outline" onClick={() => setDebtModal(null)}>
-              Vazgeç
+              {t("common.cancel")}
             </Button>
             <Button type="button" disabled={savingDebt} onClick={() => void submitDebt()}>
-              Kaydet
+              {t("common.save")}
             </Button>
           </>
         }

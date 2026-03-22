@@ -4,13 +4,11 @@ import { useLanguage, type Language } from "@/contexts/LanguageContext";
 
 const LANGUAGES: {
   code: Language;
-  label: string;
   flag: string;
   nativeLabel: string;
 }[] = [
-  { code: "tr", label: "Türkçe", flag: "🇹🇷", nativeLabel: "Türkçe" },
-  { code: "en", label: "English", flag: "🇬🇧", nativeLabel: "English" },
-  { code: "ar", label: "Arapça", flag: "🇸🇦", nativeLabel: "العربية" },
+  { code: "tr", flag: "🇹🇷", nativeLabel: "Türkçe" },
+  { code: "en", flag: "🇬🇧", nativeLabel: "English" },
 ];
 
 export function LanguageSelector() {
@@ -40,9 +38,6 @@ export function LanguageSelector() {
             >
               {lang.nativeLabel}
             </div>
-            {lang.code !== "tr" ? (
-              <div className="text-xs text-gray-400">{lang.label}</div>
-            ) : null}
           </div>
           {language === lang.code ? (
             <span className="font-bold text-green-600">✓</span>
