@@ -1,21 +1,70 @@
+import { NextResponse } from "next/server";
 import { generateLocalFinancialReply } from "@/lib/financial-ai-local";
 import { createClient } from "@/lib/supabase/server";
+
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(userId: string, limit: number, windowMs: number): boolean {
+  const now = Date.now();
+  const userLimit = rateLimitMap.get(userId);
+
+  if (!userLimit || now > userLimit.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+
+  if (userLimit.count >= limit) return false;
+
+  userLimit.count++;
+  return true;
+}
 
 export async function POST(req: Request) {
   let body: { message?: string };
   try {
     body = await req.json();
   } catch {
-    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const message = typeof body.message === "string" ? body.message : "";
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("plan, premium_until")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const isPremium =
+    (profile?.premium_until != null && new Date(profile.premium_until) > new Date()) ||
+    profile?.plan === "premium";
+
+  const limit = isPremium ? 50 : 5;
+  const windowMs = 24 * 60 * 60 * 1000;
+
+  if (!checkRateLimit(user.id, limit, windowMs)) {
+    return NextResponse.json(
+      {
+        error: isPremium
+          ? "Günlük AI limiti doldu (50 sorgu)"
+          : "Günlük AI limiti doldu. Premium'a geçerek 50 sorgu hakkı kazanın.",
+      },
+      { status: 429 }
+    );
+  }
+
+  const message = typeof body.message === "string" ? body.message : "";
+  if (!message.trim()) {
+    return NextResponse.json({ error: "Mesaj boş olamaz" }, { status: 400 });
+  }
+  if (message.length > 500) {
+    return NextResponse.json({ error: "Mesaj çok uzun (max 500 karakter)" }, { status: 400 });
   }
 
   const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
@@ -27,11 +76,11 @@ export async function POST(req: Request) {
     .eq("user_id", user.id)
     .gte("date", sinceStr)
     .order("created_at", { ascending: false })
-    .limit(200);
+    .limit(100);
 
   if (error) {
     console.error("[api/ai]", error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   const rows = transactions ?? [];
@@ -72,5 +121,5 @@ export async function POST(req: Request) {
     sonIslemler,
   });
 
-  return Response.json({ reply });
+  return NextResponse.json({ reply });
 }

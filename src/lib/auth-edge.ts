@@ -1,10 +1,51 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const AUTH_ROUTES = ["/login", "/register"];
-const PUBLIC_ROUTES = ["/forgot-password", "/auth/callback"];
+/** Oturum gerektirmeyen yollar */
+const PUBLIC_PATHS = [
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/recovery-password",
+  "/auth/callback",
+  "/auth/reset-password",
+  "/auth/delete-account",
+];
+
+/** Sadece bu önekler korunur; diğerleri (ör. `/`) doğrudan geçer */
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/islemler",
+  "/alacak-verecek",
+  "/odemeler",
+  "/rapor",
+  "/profil",
+  "/takvim",
+  "/api/ai",
+  "/generate-icons",
+];
+
+const AUTH_LANDING = ["/login", "/register"];
+
+function isPublicPath(path: string) {
+  return PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
+}
+
+function isProtectedPath(path: string) {
+  return PROTECTED_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
+}
+
+function isAuthLanding(path: string) {
+  return AUTH_LANDING.some((p) => path === p || path.startsWith(`${p}/`));
+}
 
 export async function runAuthEdge(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+
+  if (path.startsWith("/_next") || path.startsWith("/api/health")) {
+    return NextResponse.next();
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -30,13 +71,11 @@ export async function runAuthEdge(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const path = request.nextUrl.pathname;
-
-  if (PUBLIC_ROUTES.some((p) => path.startsWith(p))) {
+  if (isPublicPath(path)) {
     return supabaseResponse;
   }
 
-  if (AUTH_ROUTES.some((p) => path === p || path.startsWith(`${p}/`))) {
+  if (isAuthLanding(path)) {
     if (user) {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
@@ -46,7 +85,11 @@ export async function runAuthEdge(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (!user) {
+  if (path.startsWith("/api/") && !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (isProtectedPath(path) && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", path);

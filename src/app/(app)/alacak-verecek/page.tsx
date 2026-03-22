@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { checkMonthlyTransactionLimit } from "@/lib/plan-limits";
 import { createClient } from "@/lib/supabase/client";
 import { calculateNextBalanceAfterTransaction } from "@/lib/transaction-balance";
+import { clampAmountNum, sanitizeInput, sanitizeOptionalDate } from "@/lib/security";
 import { errToast } from "@/lib/sd-toast";
 import { analyzeAlacakVerecekVoice } from "@/lib/voice-transcript";
 import { cn } from "@/lib/utils";
@@ -712,15 +713,15 @@ export default function AlacakVerecekPage() {
       user_id: user.id,
       category,
       amount: n,
-      description: desc.trim() || "",
+      description: sanitizeInput(desc),
       date: new Date().toISOString().split("T")[0],
       contact_id,
       balance_after,
       is_paid: false,
       category_tag: null,
     };
-    const d = due.trim();
-    if (d) row.due_date = d;
+    const dd = sanitizeOptionalDate(due);
+    if (dd) row.due_date = dd;
 
     const { error } = await supabase.from("transactions").insert(row);
     setSavingDebt(false);

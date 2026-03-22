@@ -10,6 +10,12 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import toast from "react-hot-toast";
 import { errToast } from "@/lib/sd-toast";
+import {
+  clampAmountNum,
+  sanitizeInput,
+  sanitizeDate,
+  sanitizeOptionalDate,
+} from "@/lib/security";
 import { cn, todayISODate } from "@/lib/utils";
 import type { ContactRow, DefaultCategoryRow, TransactionCategory } from "@/types/database";
 import type { AddTransactionPayload } from "@/store/transactionStore";
@@ -113,7 +119,7 @@ export function TransactionForm({
   };
 
   const run = handleSubmit(async (v) => {
-    const n = parseAmount(v.amount);
+    const n = clampAmountNum(parseAmount(v.amount));
     if (n <= 0) {
       errToast("Geçerli tutar girin");
       return;
@@ -123,7 +129,9 @@ export function TransactionForm({
     if (v.contact_select && v.contact_select !== "__new__") {
       contact_id = v.contact_select;
     } else if (v.contact_select === "__new__") {
-      const { error, data } = await addContact({ name: v.new_contact_name!.trim() });
+      const { error, data } = await addContact({
+        name: sanitizeInput(v.new_contact_name!.trim(), 200),
+      });
       if (error || !data) {
         errToast(error || "Kişi eklenemedi");
         return;
@@ -135,15 +143,21 @@ export function TransactionForm({
       category: v.category,
       amount: n,
       contact_id,
-      description: v.description?.trim() || null,
-      date: v.date,
-      category_tag: v.category_tag?.trim() || null,
-      due_date: v.due_date?.trim() || null,
+      description: (() => {
+        const d = sanitizeInput(v.description ?? "");
+        return d || null;
+      })(),
+      date: sanitizeDate(v.date),
+      category_tag: (() => {
+        const tag = sanitizeInput(v.category_tag ?? "");
+        return tag || null;
+      })(),
+      due_date: sanitizeOptionalDate(v.due_date),
       is_paid: v.is_paid,
       recurring: v.recurring,
       recurring_end:
         v.recurring === "monthly" || v.recurring === "yearly"
-          ? v.recurring_end?.trim() || null
+          ? sanitizeOptionalDate(v.recurring_end)
           : null,
     };
 

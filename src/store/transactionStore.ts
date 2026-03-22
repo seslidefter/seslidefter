@@ -2,6 +2,12 @@ import { create } from "zustand";
 import { createClient } from "@/lib/supabase/client";
 import { checkMonthlyTransactionLimit } from "@/lib/plan-limits";
 import { calculateNextBalanceAfterTransaction } from "@/lib/transaction-balance";
+import {
+  clampAmountNum,
+  sanitizeInput,
+  sanitizeDate,
+  sanitizeOptionalDate,
+} from "@/lib/security";
 import type {
   ContactRow,
   RecurringOption,
@@ -198,31 +204,37 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     const limit = await checkMonthlyTransactionLimit(supabase, user.id);
     if (!limit.ok && limit.message) return { error: limit.message };
 
+    const amount = clampAmountNum(payload.amount);
     const { value: balance_after, error: balErr } = await calculateNextBalanceAfterTransaction(
       supabase,
       user.id,
-      payload.amount,
+      amount,
       payload.category
     );
     if (balErr) return { error: balErr };
-
     const row: Record<string, unknown> = {
       user_id: user.id,
       contact_id: payload.contact_id ?? null,
       category: payload.category,
-      amount: payload.amount,
-      description: payload.description ?? null,
-      date: payload.date ?? new Date().toISOString().slice(0, 10),
+      amount,
+      description: (() => {
+        const d = sanitizeInput(payload.description ?? "");
+        return d || null;
+      })(),
+      date: sanitizeDate(payload.date ?? new Date().toISOString().slice(0, 10)),
       balance_after,
-      category_tag: payload.category_tag?.trim() || null,
+      category_tag: (() => {
+        const tag = sanitizeInput(payload.category_tag ?? "");
+        return tag || null;
+      })(),
       is_paid: payload.is_paid !== false,
     };
 
-    const dd = payload.due_date?.trim();
+    const dd = sanitizeOptionalDate(payload.due_date);
     if (dd) row.due_date = dd;
-    const tr = payload.transcript?.trim();
+    const tr = sanitizeInput(payload.transcript ?? "", 2000);
     if (tr) row.transcript = tr;
-    const au = payload.audio_url?.trim();
+    const au = sanitizeInput(payload.audio_url ?? "", 500);
     if (au) row.audio_url = au;
 
     const { error } = await supabase.from("transactions").insert(row);
@@ -255,21 +267,34 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       return { error: exErr?.message ?? "Kayıt yok" };
     }
 
+    const amount = clampAmountNum(payload.amount);
     const { error } = await supabase
       .from("transactions")
       .update({
         contact_id: payload.contact_id ?? null,
         category: payload.category,
-        amount: payload.amount,
-        description: payload.description ?? null,
-        transcript: payload.transcript ?? null,
-        audio_url: payload.audio_url ?? null,
-        date: payload.date ?? new Date().toISOString().slice(0, 10),
-        category_tag: payload.category_tag?.trim() || null,
-        due_date: payload.due_date?.trim() || null,
+        amount,
+        description: (() => {
+          const d = sanitizeInput(payload.description ?? "");
+          return d || null;
+        })(),
+        transcript: (() => {
+          const tr = sanitizeInput(payload.transcript ?? "", 2000);
+          return tr || null;
+        })(),
+        audio_url: (() => {
+          const au = sanitizeInput(payload.audio_url ?? "", 500);
+          return au || null;
+        })(),
+        date: sanitizeDate(payload.date ?? new Date().toISOString().slice(0, 10)),
+        category_tag: (() => {
+          const tag = sanitizeInput(payload.category_tag ?? "");
+          return tag || null;
+        })(),
+        due_date: sanitizeOptionalDate(payload.due_date),
         is_paid: payload.is_paid !== false,
         recurring: payload.recurring && payload.recurring !== "" ? payload.recurring : "none",
-        recurring_end: payload.recurring_end?.trim() || null,
+        recurring_end: sanitizeOptionalDate(payload.recurring_end),
       })
       .eq("id", id)
       .eq("user_id", user.id);
@@ -351,9 +376,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       .from("contacts")
       .insert({
         user_id: user.id,
-        name: payload.name,
-        phone: payload.phone ?? null,
-        note: payload.note ?? null,
+        name: sanitizeInput(payload.name, 200),
+        phone: payload.phone != null ? sanitizeInput(payload.phone, 40) || null : null,
+        note: payload.note != null ? sanitizeInput(payload.note, 1000) || null : null,
       })
       .select("*")
       .single();

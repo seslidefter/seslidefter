@@ -11,6 +11,7 @@ import { usePlanLimits, type PlanLimits } from "@/hooks/usePlanLimits";
 import { createClient } from "@/lib/supabase/client";
 import { checkMonthlyTransactionLimit, FREE_LIMITS } from "@/lib/plan-limits";
 import { calculateNextBalanceAfterTransaction } from "@/lib/transaction-balance";
+import { clampAmountNum, sanitizeInput, sanitizeDate } from "@/lib/security";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTransactionStore } from "@/store/transactionStore";
@@ -175,7 +176,9 @@ export function OdemelerPageClient() {
       user_id: uid,
       category: "gider",
       amount: amt,
-      description: `${plan.icon} ${plan.title} - ${payment.installment_number}. taksit`,
+      description: sanitizeInput(
+        `${plan.icon} ${plan.title} - ${payment.installment_number}. taksit`
+      ),
       date: today,
       category_tag: "odeme_plani",
       balance_after,
@@ -556,11 +559,14 @@ function AddPlanModal({
       return;
     }
 
-    const totalAmount = parseAmount(form.total_amount);
-    const installmentAmount = parseAmount(form.installment_amount);
+    const totalAmount = clampAmountNum(parseAmount(form.total_amount));
+    const installmentAmount = clampAmountNum(parseAmount(form.installment_amount));
     const installmentCount = Math.floor(Number(form.installment_count));
+    const title = sanitizeInput(form.title);
+    const planDescription = sanitizeInput(form.description) || null;
+    const startDate = sanitizeDate(form.start_date);
 
-    if (!form.title.trim() || !totalAmount || !installmentAmount || !installmentCount) {
+    if (!title || !totalAmount || !installmentAmount || !installmentCount) {
       toast.error("Lütfen zorunlu alanları doldurun");
       return;
     }
@@ -569,12 +575,12 @@ function AddPlanModal({
       .from("payment_plans")
       .insert({
         user_id: user.id,
-        title: form.title.trim(),
-        description: form.description.trim() || null,
+        title,
+        description: planDescription,
         total_amount: totalAmount,
         installment_amount: installmentAmount,
         installment_count: installmentCount,
-        start_date: form.start_date,
+        start_date: startDate,
         due_day: Math.min(31, Math.max(1, Number(form.due_day) || 15)),
         icon: form.icon,
         color: form.color,
@@ -590,12 +596,12 @@ function AddPlanModal({
     }
 
     const planId = plan.id as string;
-    const startDate = new Date(form.start_date + "T12:00:00");
+    const startDateObj = new Date(startDate + "T12:00:00");
     const dueDay = Math.min(31, Math.max(1, Number(form.due_day) || 15));
     const rows: Record<string, unknown>[] = [];
 
     for (let i = 1; i <= installmentCount; i++) {
-      const dueDate = new Date(startDate);
+      const dueDate = new Date(startDateObj);
       dueDate.setMonth(dueDate.getMonth() + (i - 1));
       const lastDay = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0).getDate();
       dueDate.setDate(Math.min(dueDay, lastDay));
@@ -637,8 +643,8 @@ function AddPlanModal({
       user_id: user.id,
       category: "verecek",
       amount: totalAmount,
-      description: `${form.icon} ${form.title.trim()} - Ödeme planı`,
-      date: form.start_date,
+      description: sanitizeInput(`${form.icon} ${title} - Ödeme planı`),
+      date: startDate,
       category_tag: "odeme_plani",
       balance_after,
       is_paid: false,
@@ -811,8 +817,8 @@ function EditPlanModal({
     const { error } = await supabase
       .from("payment_plans")
       .update({
-        title: form.title.trim(),
-        description: form.description.trim() || null,
+        title: sanitizeInput(form.title),
+        description: sanitizeInput(form.description) || null,
         icon: form.icon,
         color: form.color,
       })

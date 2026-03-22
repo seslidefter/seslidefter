@@ -12,6 +12,7 @@ import { FREE_LIMITS } from "@/lib/plan-limits";
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "@/lib/categories";
 import { createClient } from "@/lib/supabase/client";
 import { calculateNextBalanceAfterTransaction } from "@/lib/transaction-balance";
+import { clampAmountNum, sanitizeInput, sanitizeDate } from "@/lib/security";
 import { cn, todayISODate } from "@/lib/utils";
 import type { ContactRow, DefaultCategoryRow, TransactionCategory } from "@/types/database";
 import { useTransactionStore } from "@/store/transactionStore";
@@ -99,7 +100,7 @@ export function TransactionModal({ open, onClose, contacts, initialContactId }: 
 
     if (!checkTransactionLimit()) return;
 
-    const n = parseAmount(amountStr);
+    const n = clampAmountNum(parseAmount(amountStr));
     if (n <= 0) {
       toast.error("Geçerli tutar girin");
       return;
@@ -127,10 +128,13 @@ export function TransactionModal({ open, onClose, contacts, initialContactId }: 
       user_id: user.id,
       category,
       amount: n,
-      description: description.trim() || "",
-      date: date || new Date().toISOString().split("T")[0],
+      description: sanitizeInput(description),
+      date: sanitizeDate(date || new Date().toISOString().split("T")[0]),
       contact_id: showContact ? contactId || null : null,
-      category_tag: categoryTag.trim() || null,
+      category_tag: (() => {
+        const tag = sanitizeInput(categoryTag);
+        return tag || null;
+      })(),
       balance_after,
       is_paid: true,
     };
