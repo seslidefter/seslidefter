@@ -4,17 +4,9 @@ import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/authStore";
-
-const nav = [
-  { href: "/dashboard", label: "Dashboard", emoji: "🏠" },
-  { href: "/islemler", label: "İşlemler", emoji: "📋" },
-  { href: "/alacak-verecek", label: "Alacak/Borç", emoji: "👥" },
-  { href: "/odemeler", label: "Ödemeler", emoji: "💳" },
-  { href: "/rapor", label: "Rapor", emoji: "📊" },
-  { href: "/profil", label: "Profil", emoji: "👤" },
-];
 
 function initialsFromEmailOrName(s: string) {
   const t = s.trim();
@@ -27,8 +19,18 @@ function initialsFromEmailOrName(s: string) {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useLanguage();
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
+
+  const nav = [
+    { href: "/dashboard", label: t("nav.dashboard"), emoji: "🏠" },
+    { href: "/islemler", label: t("nav.transactions"), emoji: "💸" },
+    { href: "/alacak-verecek", label: t("nav.debtCredit"), emoji: "👥" },
+    { href: "/odemeler", label: t("nav.payments"), emoji: "💳" },
+    { href: "/rapor", label: t("nav.report"), emoji: "📊" },
+    { href: "/profil", label: t("nav.profile"), emoji: "👤" },
+  ];
 
   const display =
     (user?.user_metadata?.full_name as string | undefined)?.trim() ||
@@ -39,7 +41,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col border-r md:flex"
+      className="sidebar sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col border-r md:flex"
       style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}
     >
       <div className="flex h-full flex-col">
@@ -53,7 +55,7 @@ export function Sidebar() {
             <span className="logo-emoji" aria-hidden>
               📒
             </span>
-            <span className="logo-text">SesliDefter</span>
+            <span className="logo-text">{t("common.appName")}</span>
           </div>
         </Link>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
@@ -100,7 +102,7 @@ export function Sidebar() {
             onClick={() => void signOut().then(() => router.push("/login"))}
           >
             <LogOut className="h-4 w-4" strokeWidth={2.25} />
-            Çıkış
+            {t("auth.logout")}
           </button>
         </div>
       </div>

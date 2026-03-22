@@ -18,6 +18,8 @@ import { errToast } from "@/lib/sd-toast";
 import { speak } from "@/lib/tts";
 import { formatTry } from "@/lib/utils";
 import type { TransactionRow } from "@/types/database";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuthStore } from "@/store/authStore";
 import { useDashboardVoiceFabStore } from "@/store/dashboardVoiceFabStore";
 import { useTransactionStore } from "@/store/transactionStore";
 
@@ -38,6 +40,8 @@ function VoiceQuerySync() {
 }
 
 function DashboardInner() {
+  const { t } = useLanguage();
+  const user = useAuthStore((s) => s.user);
   const transactions = useTransactionStore((s) => s.transactions);
   const contacts = useTransactionStore((s) => s.contacts);
   const loading = useTransactionStore((s) => s.loading);
@@ -74,6 +78,12 @@ function DashboardInner() {
 
   const recent = useMemo(() => transactions.slice(0, 5), [transactions]);
 
+  const firstName = useMemo(() => {
+    const meta = (user?.user_metadata?.full_name as string | undefined)?.trim();
+    if (meta) return meta.split(/\s+/)[0] ?? meta;
+    return user?.email?.split("@")[0]?.trim() ?? "";
+  }, [user]);
+
   if (loading && transactions.length === 0) {
     return (
       <PageShell variant="wide" contentClassName="flex flex-col gap-4 pb-28">
@@ -91,16 +101,20 @@ function DashboardInner() {
     <PageShell variant="wide" contentClassName="relative flex flex-col gap-4 pb-28">
       <VoiceQuerySync />
 
+      <h1 className="sd-heading text-xl text-[var(--text-primary)] md:text-2xl">
+        {t("dashboard.greeting", { name: firstName })}
+      </h1>
+
       <Card className="sd-gradient relative min-h-[160px] overflow-hidden border-0 p-7 text-white shadow-lg transition-all duration-200 hover:-translate-y-px">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-bold text-white/90">Kasa Bakiyesi</p>
+          <p className="text-sm font-bold text-white/90">{t("dashboard.cashBalance")}</p>
           <button
             type="button"
             onClick={() =>
               speak(`Kasa bakiyeniz ${sums.kasaBakiye.toFixed(2).replace(".", ",")} lira`)
             }
             className="speak-balance-btn rounded-full px-2 py-1 text-lg text-white/90 hover:bg-white/15"
-            title="Sesli oku"
+            title={t("dashboard.speakBalance")}
           >
             🔊
           </button>
@@ -122,13 +136,17 @@ function DashboardInner() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card className="border-l-4 border-l-[var(--sd-gelir)] p-4 transition-all duration-200 hover:-translate-y-px">
-          <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">Gelir</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+            {t("dashboard.income")}
+          </p>
           <p className="sd-num sd-heading mt-1 text-lg font-bold text-[var(--sd-gelir)]">
             {formatTry(sums.gelir)}
           </p>
         </Card>
         <Card className="border-l-4 border-l-[var(--sd-gider)] p-4 transition-all duration-200 hover:-translate-y-px">
-          <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">Gider</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+            {t("dashboard.expense")}
+          </p>
           <p className="sd-num sd-heading mt-1 text-lg font-bold text-[var(--sd-gider)]">
             {formatTry(sums.gider)}
           </p>
@@ -140,7 +158,9 @@ function DashboardInner() {
           </p>
         </Card>
         <Card className="border-l-4 border-l-[var(--sd-verecek)] p-4 transition-all duration-200 hover:-translate-y-px">
-          <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">Borç</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+            {t("dashboard.debt")}
+          </p>
           <p className="sd-num sd-heading mt-1 text-lg font-bold text-[var(--sd-verecek)]">
             {formatTry(sums.verecek)}
           </p>
@@ -157,21 +177,25 @@ function DashboardInner() {
 
       <section className="mt-4">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="sd-heading text-lg text-[var(--text-primary)]">Son işlemler</h2>
+          <h2 className="sd-heading text-lg text-[var(--text-primary)]">
+            {t("dashboard.recentTransactions")}
+          </h2>
           <Link
             href="/islemler"
             className="text-sm font-bold text-[var(--sd-primary)] hover:underline"
           >
-            Tümü →
+            {t("dashboard.viewAll")}
           </Link>
         </div>
         <Card className="overflow-hidden p-0 px-4">
           {recent.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-10 text-center">
               <span className="text-4xl">📭</span>
-              <p className="font-semibold text-[var(--text-secondary)]">Henüz işlem yok</p>
+              <p className="font-semibold text-[var(--text-secondary)]">
+                {t("dashboard.noTransactions")}
+              </p>
               <p className="text-sm text-[var(--text-secondary)]">
-                Alttaki ses satırı veya işlemler sayfasından ekleyin.
+                {t("dashboard.noTransactionsHint")}
               </p>
             </div>
           ) : (
@@ -186,7 +210,7 @@ function DashboardInner() {
         type="button"
         onClick={() => useDashboardVoiceFabStore.getState().requestFromFab()}
         className="sd-fab-pulse sd-gradient fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-[72] hidden h-14 w-14 items-center justify-center rounded-full text-white shadow-xl md:bottom-8 md:right-8 md:flex"
-        aria-label="Sesle kayıt — karta git"
+        aria-label={t("dashboard.voiceFabMd")}
       >
         <Mic className="h-7 w-7" strokeWidth={2.4} />
       </button>

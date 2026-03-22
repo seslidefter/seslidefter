@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { PageShell } from "@/components/layout/PageShell";
 import { persistTheme, readStoredTheme } from "@/components/providers/theme-provider";
+import { LanguageSelector } from "@/components/ui/LanguageSelector";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { errToast } from "@/lib/sd-toast";
 import { getOrCreateInviteCode } from "@/lib/invite-code";
 import { getBrowserClientSingleton } from "@/lib/supabase/client";
@@ -71,6 +73,7 @@ Hesabınızın güvenliği ve şifre gizliliği sizin sorumluluğunuzdadır. Hiz
 İletişim: seslidefter@gmail.com`;
 
 export default function ProfilPage() {
+  const { t } = useLanguage();
   const router = useRouter();
   const [profile, setProfile] = useState<ProfilProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -154,18 +157,21 @@ export default function ProfilPage() {
     ? new Date(String(profile.premium_until)) > new Date()
     : profile.plan === "premium";
 
-  const sections: { id: TabType; label: string; icon: string }[] = [
-    { id: "hesap", label: "Hesap bilgileri", icon: "👤" },
-    { id: "plan", label: "Plan ve üyelik", icon: "⭐" },
-    { id: "davet", label: "Davet ve kazan", icon: "🎁" },
-    { id: "ayarlar", label: "Ayarlar", icon: "⚙️" },
-  ];
+  const sections: { id: TabType; label: string; icon: string }[] = useMemo(
+    () => [
+      { id: "hesap", label: t("profile.accountInfo"), icon: "👤" },
+      { id: "plan", label: t("profile.planMembership"), icon: "⭐" },
+      { id: "davet", label: t("profile.inviteEarn"), icon: "🎁" },
+      { id: "ayarlar", label: t("profile.settings"), icon: "⚙️" },
+    ],
+    [t]
+  );
 
   const displayName = profileDisplayName(profile);
   const initials = profileInitials(displayName);
 
   return (
-    <PageShell title="Profil" contentClassName="pb-28 fade-in" titleClassName="hidden md:block">
+    <PageShell title={t("profile.title")} contentClassName="pb-28 fade-in" titleClassName="hidden md:block">
       <div className="mx-auto w-full max-w-6xl px-4 py-5 md:px-6">
         <div className="mb-4 flex w-full flex-col items-center gap-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 md:flex-row md:items-start md:p-6">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-green-800 to-green-500 text-2xl font-bold text-white">
@@ -248,6 +254,23 @@ export default function ProfilPage() {
             </div>
           ))}
         </div>
+
+        <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
+          <button
+            type="button"
+            onClick={() => {
+              void (async () => {
+                const sb = getBrowserClientSingleton();
+                await sb.auth.signOut();
+                await useAuthStore.getState().signOut();
+                window.location.href = "/login";
+              })();
+            }}
+            className="w-full rounded-2xl border-2 border-red-200 py-3.5 text-sm font-bold text-red-500 transition-all hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-900/20"
+          >
+            🚪 Çıkış Yap
+          </button>
+        </div>
       </div>
     </PageShell>
   );
@@ -260,31 +283,6 @@ const HesapTab = memo(function HesapTab({
   profile: ProfilProfile;
   isPremium: boolean;
 }) {
-  const signOut = useAuthStore((s) => s.signOut);
-  const [deleteStep, setDeleteStep] = useState<"idle" | "confirm" | "email_sent">("idle");
-  const [deleteLoading, setDeleteLoading] = useState(false);
-
-  async function requestAccountDeletion() {
-    setDeleteLoading(true);
-    try {
-      const supabase = getBrowserClientSingleton();
-      const { error } = await supabase.auth.signInWithOtp({
-        email: profile.email,
-        options: {
-          emailRedirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/delete-account?confirm=true`,
-          shouldCreateUser: false,
-        },
-      });
-      if (error) throw error;
-      setDeleteStep("email_sent");
-      toast.success("Onay bağlantısı e-postanıza gönderildi.");
-    } catch (err: unknown) {
-      toast.error("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
-    } finally {
-      setDeleteLoading(false);
-    }
-  }
-
   const joinDate = profile.created_at
     ? new Date(String(profile.created_at)).toLocaleDateString("tr-TR", {
         day: "numeric",
@@ -353,98 +351,6 @@ const HesapTab = memo(function HesapTab({
               </div>
             ) : null}
           </div>
-        </div>
-
-        <div className="flex flex-col gap-3.5">
-          <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-700 dark:bg-gray-800">
-            <div className="border-b border-red-100 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-900/20">
-              <p className="text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
-                ⚠️ Tehlikeli Bölge
-              </p>
-            </div>
-
-            {deleteStep === "idle" ? (
-              <div className="p-4">
-                <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
-                  Hesabınızı silmek tüm verilerinizi kalıcı olarak siler. Bu işlem geri alınamaz.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setDeleteStep("confirm")}
-                  className="w-full rounded-xl border-2 border-red-300 py-3 text-sm font-semibold text-red-600 transition-all hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-950/30"
-                >
-                  Hesabımı Sil
-                </button>
-              </div>
-            ) : null}
-
-            {deleteStep === "confirm" ? (
-              <div className="p-4">
-                <div className="mb-4 rounded-xl bg-red-50 p-4 dark:bg-red-900/20">
-                  <p className="mb-2 text-sm font-bold text-red-700 dark:text-red-400">🚨 Emin misiniz?</p>
-                  <ul className="space-y-1 text-xs text-red-600 dark:text-red-400">
-                    <li>• Tüm işlem kayıtlarınız silinir</li>
-                    <li>• Alacak/verecek verileriniz silinir</li>
-                    <li>• Ödeme planlarınız silinir</li>
-                    <li>• Bu işlem GERİ ALINAMAZ</li>
-                  </ul>
-                </div>
-                <p className="mb-4 text-center text-sm text-gray-600 dark:text-gray-400">
-                  Onaylamak için <strong>{profile.email}</strong> adresine onay bağlantısı göndereceğiz.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDeleteStep("idle")}
-                    className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-600 dark:border-gray-600 dark:text-gray-400"
-                  >
-                    Vazgeç
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void requestAccountDeletion()}
-                    disabled={deleteLoading}
-                    className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-bold text-white disabled:opacity-50"
-                  >
-                    {deleteLoading ? "⏳..." : "📧 Onay Gönder"}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            {deleteStep === "email_sent" ? (
-              <div className="p-4 text-center">
-                <div className="mb-3 text-4xl">📬</div>
-                <p className="mb-2 text-sm font-bold text-gray-900 dark:text-white">Onay E-postası Gönderildi</p>
-                <p className="mb-4 text-xs text-gray-500">
-                  <strong>{profile.email}</strong> adresine gönderilen bağlantıya tıklayarak silme işlemini
-                  onaylayın.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setDeleteStep("idle")}
-                  className="text-xs font-semibold text-green-600 underline dark:text-green-400"
-                >
-                  Vazgeç
-                </button>
-              </div>
-            ) : null}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              void (async () => {
-                const sb = getBrowserClientSingleton();
-                await sb.auth.signOut();
-                await signOut();
-                window.location.href = "/login";
-              })();
-            }}
-            className="w-full rounded-xl border-2 border-red-400 py-3.5 text-sm font-bold text-red-500 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
-          >
-            🚪 Çıkış Yap
-          </button>
         </div>
     </div>
   );
@@ -641,6 +547,11 @@ const DavetTab = memo(function DavetTab({ profile }: { profile: ProfilProfile })
 
   return (
     <div className="flex flex-col gap-4 md:col-span-2">
+      <div className="rounded-xl bg-green-50 p-3 text-center dark:bg-green-900/20">
+        <div className="text-2xl font-black text-green-700 dark:text-green-400">{inviteCount}</div>
+        <div className="text-xs text-green-600 dark:text-green-500">Davet ettiğin kullanıcı</div>
+      </div>
+
       <div className="mb-1 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div className="mb-5 flex items-center gap-3.5">
           <span className="text-4xl">🎁</span>
@@ -732,12 +643,36 @@ const DavetTab = memo(function DavetTab({ profile }: { profile: ProfilProfile })
 });
 
 const AyarlarTab = memo(function AyarlarTab({ profile }: { profile: ProfilProfile }) {
+  const { t } = useLanguage();
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [legalModal, setLegalModal] = useState<string | null>(null);
+  const [deleteStep, setDeleteStep] = useState<"idle" | "confirm" | "email_sent">("idle");
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     setTheme(readStoredTheme());
   }, []);
+
+  async function requestAccountDeletion() {
+    setDeleteLoading(true);
+    try {
+      const supabase = getBrowserClientSingleton();
+      const { error } = await supabase.auth.signInWithOtp({
+        email: profile.email,
+        options: {
+          emailRedirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/delete-account?confirm=true`,
+          shouldCreateUser: false,
+        },
+      });
+      if (error) throw error;
+      setDeleteStep("email_sent");
+      toast.success("Onay bağlantısı e-postanıza gönderildi.");
+    } catch (err: unknown) {
+      toast.error("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
 
   function toggleTheme(t: "light" | "dark") {
     setTheme(t);
@@ -787,17 +722,29 @@ const AyarlarTab = memo(function AyarlarTab({ profile }: { profile: ProfilProfil
     }
   }, [profile.id]);
 
-  const legalBody = (() => {
-    if (legalModal?.includes("KVKK")) return KVKK_TEXT;
-    if (legalModal?.includes("Gizlilik")) return PRIVACY_TEXT;
-    return TERMS_TEXT;
-  })();
+  const legalBody =
+    legalModal === "kvkk"
+      ? KVKK_TEXT
+      : legalModal === "privacy"
+        ? PRIVACY_TEXT
+        : legalModal === "terms"
+          ? TERMS_TEXT
+          : "";
+
+  const legalTitle =
+    legalModal === "kvkk"
+      ? t("profile.kvkk")
+      : legalModal === "privacy"
+        ? t("profile.privacy")
+        : legalModal === "terms"
+          ? t("profile.terms")
+          : "";
 
   return (
     <div className="flex flex-col gap-4 md:col-span-2">
       <div className="mb-1 overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
         <div className="border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-700/50 dark:text-gray-400">
-          🎨 Tema
+          🎨 {t("profile.theme")}
         </div>
         <div className="flex gap-2 p-4">
           <button
@@ -810,7 +757,7 @@ const AyarlarTab = memo(function AyarlarTab({ profile }: { profile: ProfilProfil
                 : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-white"
             )}
           >
-            ☀️ Açık
+            {t("profile.light")}
           </button>
           <button
             type="button"
@@ -822,31 +769,125 @@ const AyarlarTab = memo(function AyarlarTab({ profile }: { profile: ProfilProfil
                 : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-white"
             )}
           >
-            🌙 Koyu
+            {t("profile.dark")}
           </button>
         </div>
       </div>
 
       <div className="mb-1 overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
         <div className="border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-700/50 dark:text-gray-400">
-          📊 Verilerim
+          🌍 {t("profile.language")}
+        </div>
+        <div className="p-4">
+          <LanguageSelector />
+        </div>
+      </div>
+
+      <div className="mb-1 overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
+        <div className="border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-700/50 dark:text-gray-400">
+          🔒 {t("profile.securityPrivacy")}
+        </div>
+        <button
+          type="button"
+          onClick={() => setLegalModal("kvkk")}
+          className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3.5 text-start text-sm text-gray-700 transition-all hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700/50"
+        >
+          <span>📄</span>
+          <span className="flex-1">{t("profile.kvkk")}</span>
+          <span className="text-gray-400">›</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setLegalModal("privacy")}
+          className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3.5 text-start text-sm text-gray-700 transition-all hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700/50"
+        >
+          <span>🔐</span>
+          <span className="flex-1">{t("profile.privacy")}</span>
+          <span className="text-gray-400">›</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setLegalModal("terms")}
+          className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3.5 text-start text-sm text-gray-700 transition-all hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700/50"
+        >
+          <span>📋</span>
+          <span className="flex-1">{t("profile.terms")}</span>
+          <span className="text-gray-400">›</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setDeleteStep("confirm")}
+          className="flex w-full items-center gap-3 px-4 py-4 text-left text-red-500 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
+        >
+          <span>🗑️</span>
+          <span className="flex-1 text-sm font-semibold">{t("profile.deleteAccount")}</span>
+          <span className="text-xs text-red-400">{t("profile.deleteWarning")}</span>
+        </button>
+      </div>
+
+      {deleteStep === "confirm" ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+          <p className="mb-2 text-sm font-bold text-red-700 dark:text-red-400">🚨 Hesabınızı silmek üzeresiniz</p>
+          <p className="mb-3 text-xs text-red-600 dark:text-red-400">
+            Tüm verileriniz kalıcı olarak silinecek. Bu işlem geri alınamaz.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setDeleteStep("idle")}
+              className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 dark:border-gray-600"
+            >
+              Vazgeç
+            </button>
+            <button
+              type="button"
+              onClick={() => void requestAccountDeletion()}
+              disabled={deleteLoading}
+              className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {deleteLoading ? "⏳..." : "📧 Onay Gönder"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteStep === "email_sent" ? (
+        <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-center dark:border-green-800 dark:bg-green-900/20">
+          <p className="text-sm font-bold text-gray-900 dark:text-white">📬 Onay e-postası gönderildi</p>
+          <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+            <strong>{profile.email}</strong> adresindeki bağlantıyı kullanın.
+          </p>
+          <button
+            type="button"
+            onClick={() => setDeleteStep("idle")}
+            className="mt-3 text-xs font-semibold text-green-700 underline dark:text-green-400"
+          >
+            Kapat
+          </button>
+        </div>
+      ) : null}
+
+      <div className="mb-1 overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
+        <div className="border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-700/50 dark:text-gray-400">
+          📊 {t("profile.myData")}
         </div>
         <button
           type="button"
           onClick={() => void exportExcel()}
-          className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3.5 text-left text-sm text-gray-700 transition-all last:border-0 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700/50"
+          className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3.5 text-start text-sm text-gray-700 transition-all last:border-0 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700/50"
         >
           <span>📥</span>
-          <span className="flex-1">Excel olarak indir</span>
+          <span className="flex-1">{t("profile.downloadExcel")}</span>
           <span className="text-gray-400">›</span>
         </button>
       </div>
 
       <div className="mb-1 overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
         <div className="border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-700/50 dark:text-gray-400">
-          🍎 Siri Kısayolları
+          🍎 {t("profile.siriTitle")}
         </div>
         <div className="px-4 py-2.5">
+          <p className="text-xs text-gray-600 dark:text-gray-400">{t("profile.siriDesc")}</p>
           {['"Hey Siri, SesliDefter aç"', '"Hey Siri, gider ekle"'].map((cmd) => (
             <div key={cmd} className="py-1 text-xs italic text-gray-500 dark:text-gray-400">
               {cmd}
@@ -864,27 +905,6 @@ const AyarlarTab = memo(function AyarlarTab({ profile }: { profile: ProfilProfil
         </button>
       </div>
 
-      <div className="mb-1 overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
-        <div className="border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-700/50 dark:text-gray-400">
-          ⚖️ Yasal
-        </div>
-        {["Gizlilik Politikası", "KVKK Aydınlatma Metni", "Kullanım Koşulları"].map((item, i, arr) => (
-          <button
-            key={item}
-            type="button"
-            onClick={() => setLegalModal(item)}
-            className={cn(
-              "flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3.5 text-left text-sm text-gray-700 transition-all hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700/50",
-              i === arr.length - 1 && "border-b-0"
-            )}
-          >
-            <span>📄</span>
-            <span className="flex-1">{item}</span>
-            <span className="text-gray-400">›</span>
-          </button>
-        ))}
-      </div>
-
       {legalModal ? (
         <div
           className="fixed inset-0 z-[130] flex items-end justify-center bg-black/50 p-4 sm:items-center"
@@ -897,12 +917,12 @@ const AyarlarTab = memo(function AyarlarTab({ profile }: { profile: ProfilProfil
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-gray-700">
-              <h3 className="m-0 text-base font-bold text-gray-900 dark:text-white">{legalModal}</h3>
+              <h3 className="m-0 text-base font-bold text-gray-900 dark:text-white">{legalTitle}</h3>
               <button
                 type="button"
                 className="text-xl text-gray-500 dark:text-gray-400"
                 onClick={() => setLegalModal(null)}
-                aria-label="Kapat"
+                aria-label={t("common.close")}
               >
                 ✕
               </button>
@@ -920,8 +940,9 @@ const AyarlarTab = memo(function AyarlarTab({ profile }: { profile: ProfilProfil
 });
 
 function ProfilSkeleton() {
+  const { t } = useLanguage();
   return (
-    <PageShell title="Profil" contentClassName="pb-28 fade-in" titleClassName="hidden md:block">
+    <PageShell title={t("profile.title")} contentClassName="pb-28 fade-in" titleClassName="hidden md:block">
       <div className="mx-auto max-w-xl px-4 py-5">
         <div className="mb-4 h-[100px] animate-pulse rounded-2xl bg-gray-200 dark:bg-gray-700" />
         <div className="mb-4 h-[52px] animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700" />

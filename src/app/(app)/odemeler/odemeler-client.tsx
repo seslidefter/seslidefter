@@ -9,8 +9,10 @@ import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { usePlanLimits, type PlanLimits } from "@/hooks/usePlanLimits";
 import { createClient } from "@/lib/supabase/client";
-import { FREE_LIMITS } from "@/lib/plan-limits";
+import { checkMonthlyTransactionLimit, FREE_LIMITS } from "@/lib/plan-limits";
+import { calculateNextBalanceAfterTransaction } from "@/lib/transaction-balance";
 import { cn } from "@/lib/utils";
+import { useTransactionStore } from "@/store/transactionStore";
 
 export interface PaymentPlan {
   id: string;
@@ -32,6 +34,7 @@ export interface PaymentPlan {
 export interface PlanPayment {
   id: string;
   plan_id: string;
+  user_id: string;
   installment_number: number;
   amount: number;
   due_date: string;
@@ -60,7 +63,9 @@ export function OdemelerPageClient() {
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PaymentPlan | null>(null);
+  const [editPlan, setEditPlan] = useState<PaymentPlan | null>(null);
   const { planData, refresh: refreshPlan } = usePlanLimits();
+  const fetchAllTx = useTransactionStore((s) => s.fetchAll);
 
   const loadData = useCallback(async () => {
     const supabase = createClient();
@@ -132,7 +137,54 @@ export function OdemelerPageClient() {
 
   const markAsPaid = async (payment: PlanPayment) => {
     const supabase = createClient();
-    const today = new Date().toISOString().split("T")[0];
+    const uid = payment.user_id;
+    if (!uid) {
+      toast.error("Kullanıcı bilgisi eksik");
+      return;
+    }
+
+    const plan = plans.find((p) => p.id === payment.plan_id);
+    if (!plan) {
+      toast.error("Plan bulunamadı");
+      return;
+    }
+
+    const limit = await checkMonthlyTransactionLimit(supabase, uid);
+    if (!limit.ok && limit.message) {
+      toast.error(limit.message);
+      return;
+    }
+
+    const amt = Number(payment.amount);
+    const { value: balance_after, error: balErr } = await calculateNextBalanceAfterTransaction(
+      supabase,
+      uid,
+      amt,
+      "gider"
+    );
+    if (balErr) {
+      toast.error(balErr);
+      return;
+    }
+
+    const today = new Date().toISOString().split("T")[0]!;
+
+    const { error: txIns } = await supabase.from("transactions").insert({
+      user_id: uid,
+      category: "gider",
+      amount: amt,
+      description: `${plan.icon} ${plan.title} - ${payment.installment_number}. taksit`,
+      date: today,
+      category_tag: "odeme_plani",
+      balance_after,
+      is_paid: true,
+    });
+
+    if (txIns) {
+      toast.error("İşlem eklenemedi: " + txIns.message);
+      return;
+    }
+
     const { error } = await supabase
       .from("payment_plan_payments")
       .update({ is_paid: true, paid_date: today })
@@ -143,21 +195,40 @@ export function OdemelerPageClient() {
       return;
     }
 
-    const plan = plans.find((p) => p.id === payment.plan_id);
-    if (plan) {
-      await supabase
-        .from("payment_plans")
-        .update({
-          paid_amount: Number(plan.paid_amount) + Number(payment.amount),
-          paid_count: plan.paid_count + 1,
-        })
-        .eq("id", plan.id);
-    }
+    await supabase
+      .from("payment_plans")
+      .update({
+        paid_amount: Number(plan.paid_amount) + amt,
+        paid_count: plan.paid_count + 1,
+      })
+      .eq("id", plan.id);
 
-    toast.success("✅ Ödeme işaretlendi!");
+    toast.success("✅ Taksit ödendi ve kayıt eklendi!");
     void loadData();
     void refreshPlan();
+    void fetchAllTx();
   };
+
+  async function deletePlan(planId: string) {
+    if (!confirm("Bu ödeme planını silmek istediğinizden emin misiniz?")) return;
+    const supabase = createClient();
+    const { error: txDel } = await supabase.from("transactions").delete().eq("plan_id", planId);
+    if (txDel) {
+      toast.error("İlişkili kayıt silinemedi: " + txDel.message);
+      return;
+    }
+    const { error } = await supabase.from("payment_plans").delete().eq("id", planId);
+    if (error) {
+      toast.error("Silinemedi: " + error.message);
+      return;
+    }
+    toast.success("🗑️ Plan silindi");
+    setSelectedPlan(null);
+    setEditPlan(null);
+    void loadData();
+    void refreshPlan();
+    void fetchAllTx();
+  }
 
   if (loading) {
     return (
@@ -264,10 +335,10 @@ export function OdemelerPageClient() {
           const nextPayment = payments.find((p) => p.plan_id === plan.id && !p.is_paid);
 
           return (
+            <div key={plan.id} className="plan-card w-full text-left">
             <button
-              key={plan.id}
               type="button"
-              className="plan-card w-full text-left"
+              className="w-full text-left"
               onClick={() => setSelectedPlan(plan)}
             >
               <div className="plan-header">
@@ -327,6 +398,30 @@ export function OdemelerPageClient() {
                 </div>
               ) : null}
             </button>
+
+              <div className="flex gap-2 border-t border-[var(--border-color)] px-3 pb-3 pt-3">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditPlan(plan);
+                  }}
+                  className="flex-1 rounded-xl bg-blue-50 py-2 text-xs font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                >
+                  ✏️ Düzenle
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void deletePlan(plan.id);
+                  }}
+                  className="flex-1 rounded-xl bg-red-50 py-2 text-xs font-bold text-red-500 dark:bg-red-900/30"
+                >
+                  🗑️ Sil
+                </button>
+              </div>
+            </div>
           );
         })}
 
@@ -348,6 +443,20 @@ export function OdemelerPageClient() {
           onSave={() => {
             void loadData();
             void refreshPlan();
+            void fetchAllTx();
+          }}
+        />
+      ) : null}
+
+      {editPlan ? (
+        <EditPlanModal
+          plan={editPlan}
+          onClose={() => setEditPlan(null)}
+          onSave={() => {
+            void loadData();
+            void refreshPlan();
+            setEditPlan(null);
+            setSelectedPlan(null);
           }}
         />
       ) : null}
@@ -462,6 +571,40 @@ function AddPlanModal({
     if (payErr) {
       toast.error("Taksitler oluşturulamadı: " + payErr.message);
       return;
+    }
+
+    const limit = await checkMonthlyTransactionLimit(supabase, user.id);
+    if (!limit.ok && limit.message) {
+      toast.error(limit.message);
+      return;
+    }
+
+    const { value: balance_after, error: balErr } = await calculateNextBalanceAfterTransaction(
+      supabase,
+      user.id,
+      totalAmount,
+      "verecek"
+    );
+    if (balErr) {
+      toast.error(balErr);
+      return;
+    }
+
+    const { error: txErr } = await supabase.from("transactions").insert({
+      user_id: user.id,
+      category: "verecek",
+      amount: totalAmount,
+      description: `${form.icon} ${form.title.trim()} - Ödeme planı`,
+      date: form.start_date,
+      category_tag: "odeme_plani",
+      balance_after,
+      is_paid: false,
+      plan_id: planId,
+      contact_id: null,
+    });
+    if (txErr) {
+      console.error(txErr);
+      toast.error("Plan oluştu; borç kaydı eklenemedi: " + txErr.message);
     }
 
     toast.success("✅ Ödeme planı oluşturuldu!");
@@ -592,6 +735,117 @@ function AddPlanModal({
           </Button>
           <Button type="button" fullWidth onClick={() => void handleSave()}>
             💳 Plan oluştur
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditPlanModal({
+  plan,
+  onClose,
+  onSave,
+}: {
+  plan: PaymentPlan;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const [form, setForm] = useState({
+    title: plan.title,
+    description: plan.description ?? "",
+    icon: plan.icon,
+    color: plan.color,
+  });
+
+  const icons = ["💳", "🏠", "🚗", "📱", "🏥", "📚", "🛋️", "❄️", "🖥️", "✈️"];
+  const colors = ["#1976D2", "#2E7D32", "#D32F2F", "#F57C00", "#7B1FA2", "#00796B"];
+
+  async function handleSave() {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("payment_plans")
+      .update({
+        title: form.title.trim(),
+        description: form.description.trim() || null,
+        icon: form.icon,
+        color: form.color,
+      })
+      .eq("id", plan.id);
+    if (error) {
+      toast.error("Güncellenemedi: " + error.message);
+      return;
+    }
+    toast.success("✅ Plan güncellendi");
+    onSave();
+    onClose();
+  }
+
+  return (
+    <div
+      className="modal-overlay fixed inset-0 z-[120] flex items-end justify-center bg-black/50 p-4 sm:items-center"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="modal-content max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-[var(--bg-card)] p-4 shadow-xl"
+        role="dialog"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-[var(--text-primary)]">✏️ Planı düzenle</h2>
+          <button type="button" className="text-xl text-[var(--text-secondary)]" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {icons.map((icon) => (
+            <button
+              key={icon}
+              type="button"
+              className={cn(
+                "rounded-xl border-2 p-2 text-xl",
+                form.icon === icon ? "border-[var(--sd-primary)]" : "border-transparent"
+              )}
+              onClick={() => setForm((f) => ({ ...f, icon }))}
+            >
+              {icon}
+            </button>
+          ))}
+        </div>
+        <input
+          placeholder="Plan adı"
+          value={form.title}
+          onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+          className="form-input mt-3 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2 text-[var(--text-primary)]"
+        />
+        <input
+          placeholder="Açıklama"
+          value={form.description}
+          onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+          className="form-input mt-2 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2 text-[var(--text-primary)]"
+        />
+        <div className="mt-3 flex flex-wrap gap-2">
+          {colors.map((color) => (
+            <button
+              key={color}
+              type="button"
+              className={cn(
+                "h-9 w-9 rounded-full border-2",
+                form.color === color ? "border-[var(--text-primary)]" : "border-transparent"
+              )}
+              style={{ background: color }}
+              onClick={() => setForm((f) => ({ ...f, color }))}
+              aria-label={color}
+            />
+          ))}
+        </div>
+        <div className="modal-footer mt-4 flex gap-2">
+          <Button type="button" variant="outline" fullWidth onClick={onClose}>
+            İptal
+          </Button>
+          <Button type="button" fullWidth onClick={() => void handleSave()}>
+            Kaydet
           </Button>
         </div>
       </div>

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 import { FREE_LIMITS } from "@/lib/plan-limits";
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "@/lib/categories";
 import { createClient } from "@/lib/supabase/client";
 import { calculateNextBalanceAfterTransaction } from "@/lib/transaction-balance";
 import { cn, todayISODate } from "@/lib/utils";
@@ -76,7 +77,13 @@ export function TransactionModal({ open, onClose, contacts, initialContactId }: 
     [tagOptions, category]
   );
 
+  const structuredTagOptions = useMemo(
+    () => (category === "gelir" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES),
+    [category]
+  );
+
   const showContact = category === "alacak" || category === "verecek";
+  const showStructuredTags = category === "gelir" || category === "gider";
   const limitReached =
     planData != null && !planData.isPremium && planData.monthlyUsed >= FREE_LIMITS.monthlyTransactions;
 
@@ -198,21 +205,52 @@ export function TransactionModal({ open, onClose, contacts, initialContactId }: 
             />
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-sm font-bold text-[var(--text-primary)]">Alt kategori</label>
-            <select
-              value={categoryTag}
-              onChange={(e) => setCategoryTag(e.target.value)}
-              className="min-h-[52px] w-full rounded-xl border-[1.5px] border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 text-sm text-[var(--text-primary)]"
-            >
-              <option value="">—</option>
-              {tagFiltered.map((t) => (
-                <option key={t.id} value={t.name}>
-                  {t.icon} {t.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {showStructuredTags ? (
+            <div>
+              <label className="mb-2 block text-xs font-semibold text-gray-600 dark:text-gray-400">
+                Alt kategori
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {structuredTagOptions.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setCategoryTag(cat.label)}
+                    className={cn(
+                      "flex flex-col items-center gap-1 rounded-xl border-2 p-2 text-xs font-semibold transition-all",
+                      categoryTag === cat.label
+                        ? "border-transparent text-white"
+                        : "border-[var(--border-color)] text-[var(--text-secondary)]"
+                    )}
+                    style={
+                      categoryTag === cat.label
+                        ? { background: cat.color, borderColor: cat.color }
+                        : undefined
+                    }
+                  >
+                    <span className="text-lg">{cat.icon}</span>
+                    <span className="text-center leading-tight">{cat.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1.5 block text-sm font-bold text-[var(--text-primary)]">Alt kategori</label>
+              <select
+                value={categoryTag}
+                onChange={(e) => setCategoryTag(e.target.value)}
+                className="min-h-[52px] w-full rounded-xl border-[1.5px] border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 text-sm text-[var(--text-primary)]"
+              >
+                <option value="">—</option>
+                {tagFiltered.map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.icon} {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {showContact ? (
             <div>

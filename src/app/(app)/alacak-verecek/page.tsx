@@ -5,7 +5,6 @@ import toast from "react-hot-toast";
 import { PageShell } from "@/components/layout/PageShell";
 import { AmountInput, parseAmount } from "@/components/ui/AmountInput";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -14,8 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { calculateNextBalanceAfterTransaction } from "@/lib/transaction-balance";
 import { errToast } from "@/lib/sd-toast";
 import { analyzeAlacakVerecekVoice } from "@/lib/voice-transcript";
-import { sendWhatsAppReminder, shareDebtOnWhatsApp } from "@/lib/whatsapp";
-import { cn, formatShortDate, formatTry } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type {
   ContactRow,
   RecurringOption,
@@ -24,11 +22,6 @@ import type {
 } from "@/types/database";
 import { useAuthStore } from "@/store/authStore";
 import { useTransactionStore } from "@/store/transactionStore";
-
-function initials(name: string) {
-  const p = name.trim().split(/\s+/).filter(Boolean);
-  return (p[0]?.[0] ?? "?").toLocaleUpperCase("tr-TR");
-}
 
 function resolveContactId(contacts: ContactRow[], name: string | null): string | null {
   if (!name?.trim()) return null;
@@ -50,24 +43,31 @@ function toInputDate(d: string | null | undefined): string {
   return String(d).slice(0, 10);
 }
 
-function DebtTransactionRow({
+function DebtCreditRow({
   tx,
   contacts,
   onEdit,
   onDelete,
   onMarkPaid,
+  isLast,
 }: {
   tx: TransactionRow;
   contacts: ContactRow[];
   onEdit: (tx: TransactionRow) => void;
   onDelete: (id: string) => void;
   onMarkPaid: (id: string) => void;
+  isLast?: boolean;
 }) {
   const contact = contacts.find((c) => c.id === tx.contact_id);
   const isAlacak = tx.category === "alacak";
 
   return (
-    <div className="group flex items-center gap-3 border-b border-gray-100 py-3 pl-4 pr-2 last:border-0 transition-all hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/30">
+    <div
+      className={cn(
+        "group flex items-center gap-3 py-3 pl-4 pr-2 transition-all hover:bg-gray-50 dark:hover:bg-gray-700/30",
+        !isLast && "border-b border-gray-100 dark:border-gray-700"
+      )}
+    >
       <div
         className={`h-10 w-1 shrink-0 rounded-full ${isAlacak ? "bg-blue-500" : "bg-orange-500"}`}
       />
@@ -470,28 +470,21 @@ export default function AlacakVerecekPage() {
     return { al, ve };
   }, [transactions]);
 
-  const rows = useMemo(() => {
-    const map = new Map<
-      string,
-      { contact: ContactRow; alacak: number; verecek: number; last?: string }
-    >();
-    for (const c of contacts) {
-      map.set(c.id, { contact: c, alacak: 0, verecek: 0 });
-    }
-    for (const t of transactions) {
-      if (!t.contact_id) continue;
-      const row = map.get(t.contact_id);
-      if (!row) continue;
-      const a = Number(t.amount);
-      if (t.category === "alacak") row.alacak += a;
-      if (t.category === "verecek") row.verecek += a;
-      const d = t.date;
-      if (!row.last || d > row.last) row.last = d;
-    }
-    return Array.from(map.values()).sort((a, b) =>
-      a.contact.name.localeCompare(b.contact.name, "tr")
-    );
-  }, [contacts, transactions]);
+  const creditTransactions = useMemo(
+    () =>
+      transactions
+        .filter((t) => t.category === "alacak")
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [transactions]
+  );
+
+  const debtTransactions = useMemo(
+    () =>
+      transactions
+        .filter((t) => t.category === "verecek")
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [transactions]
+  );
 
   const detailTx = useMemo(() => {
     if (!detail) return [];
@@ -767,35 +760,42 @@ export default function AlacakVerecekPage() {
   return (
     <PageShell
       title="Alacak / Borç"
-      contentClassName="flex flex-col gap-4 pb-28"
+      contentClassName="mx-auto w-full max-w-4xl flex flex-col gap-4 px-4 py-5 pb-28"
       titleClassName="hidden md:block"
     >
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="border-l-4 border-l-[var(--sd-alacak)] p-4 transition-all duration-200 hover:-translate-y-px">
-          <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
-            Toplam alacak
-          </p>
-          <p className="sd-num sd-heading mt-1 text-xl font-extrabold text-[var(--sd-alacak)]">
-            {formatTry(totals.al)}
-          </p>
-        </Card>
-        <Card className="border-l-4 border-l-[var(--sd-verecek)] p-4 transition-all duration-200 hover:-translate-y-px">
-          <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
-            Toplam borç
-          </p>
-          <p className="sd-num sd-heading mt-1 text-xl font-extrabold text-[var(--sd-verecek)]">
-            {formatTry(totals.ve)}
-          </p>
-        </Card>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-black text-gray-900 dark:text-white">Alacak / Borç</h1>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => openDebt("alacak")}
+            className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white"
+          >
+            + Alacak
+          </button>
+          <button
+            type="button"
+            onClick={() => openDebt("verecek")}
+            className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white"
+          >
+            + Borç
+          </button>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Button type="button" fullWidth variant="primary" onClick={() => openDebt("alacak")}>
-          Alacak ekle
-        </Button>
-        <Button type="button" fullWidth variant="outline" onClick={() => openDebt("verecek")}>
-          Borç ekle
-        </Button>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+          <div className="mb-1 text-xs font-bold uppercase text-blue-600 dark:text-blue-400">Toplam alacak</div>
+          <div className="text-2xl font-black text-blue-700 dark:text-blue-300">
+            ₺{totals.al.toLocaleString("tr-TR")}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-900/20">
+          <div className="mb-1 text-xs font-bold uppercase text-orange-600 dark:text-orange-400">Toplam borç</div>
+          <div className="text-2xl font-black text-orange-700 dark:text-orange-300">
+            ₺{totals.ve.toLocaleString("tr-TR")}
+          </div>
+        </div>
       </div>
 
       <div
@@ -817,89 +817,65 @@ export default function AlacakVerecekPage() {
         </button>
       </div>
 
-      {rows.length === 0 ? (
-        <Card className="flex flex-col items-center gap-2 py-14 text-center">
-          <span className="text-5xl">👥</span>
-          <p className="font-bold text-[var(--text-secondary)]">Henüz kişi yok</p>
-          <p className="text-sm text-[var(--text-secondary)]">Alacak veya borç ekleyerek başlayın.</p>
-        </Card>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {rows.map(({ contact, alacak, verecek, last }) => {
-            const net = alacak - verecek;
-            const tot = alacak + verecek || 1;
-            const pAl = Math.round((alacak / tot) * 100);
-            const pVe = 100 - pAl;
-            const hue = contact.name.charCodeAt(0) % 360;
-            const waType = net >= 0 ? "alacak" : "verecek";
-            const waAmount = Math.abs(net);
-
-            return (
-              <div key={contact.id} className="relative">
-                <button
-                  type="button"
-                  onClick={() => setDetail(contact)}
-                  className="w-full text-left"
-                >
-                  <Card className="p-4 pr-14 transition-all duration-200 hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
-                    <div className="flex items-center gap-4">
-                      <div
-                        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-extrabold text-white shadow-inner"
-                        style={{
-                          background: `linear-gradient(135deg, hsl(${hue},55%,42%), hsl(${hue},55%,52%))`,
-                        }}
-                      >
-                        {initials(contact.name)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-lg font-extrabold tracking-tight text-[var(--text-primary)]">
-                          {contact.name}
-                        </p>
-                        <p className="text-xs font-semibold text-[var(--text-secondary)]">
-                          Son: {last ? formatShortDate(last) : "—"}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p
-                          className={cn(
-                            "sd-num text-xl font-extrabold",
-                            net >= 0 ? "text-[var(--sd-alacak)]" : "text-[var(--sd-verecek)]"
-                          )}
-                        >
-                          {formatTry(net)}
-                        </p>
-                        <p className="text-[10px] font-bold text-[var(--text-secondary)]">net</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-[var(--bg-secondary)]">
-                      <div className="flex h-full w-full">
-                        <div className="h-full min-w-0 bg-[var(--sd-gelir)]" style={{ width: `${pAl}%` }} />
-                        <div className="h-full min-w-0 bg-[var(--sd-gider)]" style={{ width: `${pVe}%` }} />
-                      </div>
-                    </div>
-                  </Card>
-                </button>
-                <button
-                  type="button"
-                  className="whatsapp-reminder-btn absolute right-3 top-1/2 z-10 -translate-y-1/2"
-                  title="WhatsApp hatırlatma"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (contact.phone?.replace(/\D/g, "").length) {
-                      sendWhatsAppReminder(contact.phone, contact.name, waAmount, waType);
-                    } else {
-                      shareDebtOnWhatsApp(contact.name, waAmount, waType);
-                    }
-                  }}
-                >
-                  <span aria-hidden>📱</span>
-                </button>
-              </div>
-            );
-          })}
+      <div className="mb-6">
+        <div className="mb-3 flex items-center gap-2">
+          <div className="h-3 w-3 rounded-full bg-blue-500" />
+          <h2 className="text-base font-bold text-gray-900 dark:text-white">Alacaklar</h2>
+          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
+            {creditTransactions.length}
+          </span>
         </div>
-      )}
+        {creditTransactions.length === 0 ? (
+          <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
+            <div className="mb-2 text-3xl">📥</div>
+            <p className="text-sm text-gray-400">Henüz alacak yok</p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
+            {creditTransactions.map((tx, i) => (
+              <DebtCreditRow
+                key={tx.id}
+                tx={tx}
+                contacts={contacts}
+                onEdit={setEditTx}
+                onDelete={handleDeleteDebtTx}
+                onMarkPaid={handleMarkPaid}
+                isLast={i === creditTransactions.length - 1}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="mb-3 flex items-center gap-2">
+          <div className="h-3 w-3 rounded-full bg-orange-500" />
+          <h2 className="text-base font-bold text-gray-900 dark:text-white">Borçlar</h2>
+          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-700 dark:bg-orange-900/40 dark:text-orange-400">
+            {debtTransactions.length}
+          </span>
+        </div>
+        {debtTransactions.length === 0 ? (
+          <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
+            <div className="mb-2 text-3xl">📤</div>
+            <p className="text-sm text-gray-400">Henüz borç yok</p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
+            {debtTransactions.map((tx, i) => (
+              <DebtCreditRow
+                key={tx.id}
+                tx={tx}
+                contacts={contacts}
+                onEdit={setEditTx}
+                onDelete={handleDeleteDebtTx}
+                onMarkPaid={handleMarkPaid}
+                isLast={i === debtTransactions.length - 1}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       <Modal
         open={!!detail}
@@ -911,14 +887,15 @@ export default function AlacakVerecekPage() {
             {detailTx.length === 0 ? (
               <p className="p-4 text-sm text-[var(--text-secondary)]">Kayıt yok.</p>
             ) : (
-              detailTx.map((t: TransactionRow) => (
-                <DebtTransactionRow
+              detailTx.map((t: TransactionRow, i: number) => (
+                <DebtCreditRow
                   key={t.id}
                   tx={t}
                   contacts={contacts}
                   onEdit={setEditTx}
                   onDelete={handleDeleteDebtTx}
                   onMarkPaid={handleMarkPaid}
+                  isLast={i === detailTx.length - 1}
                 />
               ))
             )}

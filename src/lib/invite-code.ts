@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -16,12 +16,13 @@ function isUniqueViolation(err: { code?: string; message?: string } | null | und
 }
 
 /**
- * Profilde kayıtlı davet kodunu döner; yoksa benzersiz kod üretip yazar (çakışmada tekrar dener).
+ * Profilde kayıtlı davet kodunu döner; yoksa bir kez üretip yazar.
+ * Mevcut kod varsa asla yeniden üretilmez.
  */
 export async function getOrCreateInviteCode(userId: string): Promise<string> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
 
-  const { data: row, error: selErr } = await supabase
+  const { data, error: selErr } = await supabase
     .from("profiles")
     .select("invite_code")
     .eq("id", userId)
@@ -29,25 +30,18 @@ export async function getOrCreateInviteCode(userId: string): Promise<string> {
 
   if (selErr) console.error("[invite-code] select", selErr);
 
-  const existing = row?.invite_code?.trim();
+  const existing = data?.invite_code?.trim();
   if (existing) return existing;
 
-  for (let attempt = 0; attempt < 25; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     const code = generateCode();
     const { error: upErr } = await supabase.from("profiles").update({ invite_code: code }).eq("id", userId);
-    if (!upErr) {
-      const { data: again } = await supabase
-        .from("profiles")
-        .select("invite_code")
-        .eq("id", userId)
-        .maybeSingle();
-      return again?.invite_code?.trim() ?? code;
-    }
+    if (!upErr) return code;
     if (!isUniqueViolation(upErr)) {
       console.error("[invite-code] update", upErr);
       break;
     }
   }
 
-  return generateCode();
+  return userId.slice(0, 8).toUpperCase();
 }

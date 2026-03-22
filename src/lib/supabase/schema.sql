@@ -233,6 +233,9 @@ ALTER TABLE payment_plan_payments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "own_plan_payments" ON payment_plan_payments;
 CREATE POLICY "own_plan_payments" ON payment_plan_payments FOR ALL USING (auth.uid() = user_id);
 
+-- Ödeme planı ile ilişkili toplam borç satırı (transactions.plan_id)
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS plan_id UUID REFERENCES payment_plans(id) ON DELETE SET NULL;
+
 CREATE OR REPLACE FUNCTION public.get_monthly_transaction_count(p_user_id UUID)
 RETURNS INTEGER
 LANGUAGE sql

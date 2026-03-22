@@ -1,3 +1,4 @@
+import { detectCategory, getCategoryById } from "@/lib/categories";
 import { parseTryAmount } from "@/lib/utils";
 import type { TransactionCategory } from "@/types/database";
 
@@ -131,6 +132,14 @@ export function analyzeVoiceTranscript(text: string): VoiceAnalysisResult {
   else if (/benzin|akaryakıt|taksi|otobüs|metro/.test(lower)) tag = "Ulaşım";
   else if (/yemek|restoran|kafe|kahve/.test(lower)) tag = "Yemek";
   else if (/maaş|ücret/.test(lower)) tag = "Maaş";
+
+  if (category === "gelir" || category === "gider") {
+    const tagId = detectCategory(raw, category);
+    if (tagId !== "diger_gelir" && tagId !== "diger_gider") {
+      const det = getCategoryById(tagId);
+      if (det) tag = det.label;
+    }
+  }
 
   const stopWords = new Set([
     "lira",

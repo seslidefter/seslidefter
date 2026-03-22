@@ -2987,3 +2987,28 @@ nav,
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
+/* RTL (Arabic) */
+[dir="rtl"] {
+  text-align: right;
+}
+
+[dir="rtl"] .sidebar {
+  right: 0;
+  left: auto;
+  border-right: none;
+  border-left: 1px solid var(--border-color);
+}
+
+[dir="rtl"] .mobile-nav {
+  direction: rtl;
+}
+
+[dir="rtl"] .flex-row-reverse-rtl {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] input,
+[dir="rtl"] textarea {
+  text-align: right;
+}

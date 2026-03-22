@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { GoogleIcon } from "@/components/auth/google-icon";
+import { LanguageSelectorCompact } from "@/components/ui/LanguageSelector";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 
@@ -112,6 +114,7 @@ function FormInput({
   placeholder?: string;
   autoComplete?: string;
 }) {
+  const { t } = useLanguage();
   const [show, setShow] = useState(false);
   const isPassword = type === "password";
 
@@ -126,6 +129,8 @@ function FormInput({
           placeholder={placeholder}
           autoComplete={autoComplete}
           className={`w-full rounded-xl border-2 bg-gray-50 px-4 py-3 text-sm text-gray-900 transition-all focus:outline-none dark:bg-gray-800 dark:text-white ${
+            isPassword ? "pe-12 " : ""
+          } ${
             error
               ? "border-red-400 focus:border-red-500"
               : "border-gray-200 focus:border-green-500 dark:border-gray-700"
@@ -135,8 +140,8 @@ function FormInput({
           <button
             type="button"
             onClick={() => setShow((s) => !s)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-lg text-gray-400"
-            aria-label={show ? "Gizle" : "Göster"}
+            className="absolute end-3 top-1/2 -translate-y-1/2 text-lg text-gray-400"
+            aria-label={show ? t("auth.hidePassword") : t("auth.showPassword")}
           >
             {show ? "🙈" : "👁️"}
           </button>
@@ -148,6 +153,7 @@ function FormInput({
 }
 
 export function RegisterForm() {
+  const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialized = useAuthStore((s) => s.initialized);
@@ -184,7 +190,7 @@ export function RegisterForm() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3">
         <div className="sd-spinner h-10 w-10" />
-        <p className="text-sm text-gray-500">Yönlendiriliyor…</p>
+        <p className="text-sm text-gray-500">{t("auth.redirecting")}</p>
       </div>
     );
   }
@@ -265,12 +271,15 @@ export function RegisterForm() {
   return (
     <div className="flex min-h-screen flex-col">
       <div className="relative overflow-hidden bg-gradient-to-br from-green-900 via-green-700 to-green-600 px-6 pb-8 pt-12 text-center text-white">
+        <div className="absolute end-4 top-4 z-10">
+          <LanguageSelectorCompact />
+        </div>
         <div className="absolute right-0 top-0 h-40 w-40 translate-x-1/2 -translate-y-1/2 rounded-full bg-white/10" />
         <div className="absolute bottom-0 left-0 h-24 w-24 -translate-x-1/2 translate-y-1/2 rounded-full bg-white/[0.08]" />
         <div className="relative">
           <div className="mb-2 text-5xl">📒</div>
-          <h1 className="text-2xl font-black">SesliDefter</h1>
-          <p className="mt-1 text-sm opacity-80">Hesap oluştur, takibe başla</p>
+          <h1 className="text-2xl font-black">{t("auth.slogan")}</h1>
+          <p className="mt-1 text-sm opacity-80">{t("auth.registerSubtitle")}</p>
         </div>
       </div>
 
@@ -280,10 +289,10 @@ export function RegisterForm() {
             href="/login"
             className="flex-1 rounded-xl py-2.5 text-center text-sm font-semibold text-gray-500 dark:text-gray-400"
           >
-            Giriş Yap
+            {t("auth.login")}
           </Link>
           <div className="flex-1 rounded-xl bg-white py-2.5 text-center text-sm font-bold text-green-700 shadow-sm dark:bg-gray-700 dark:text-green-400">
-            Kayıt Ol
+            {t("auth.register")}
           </div>
         </div>
 
@@ -293,18 +302,18 @@ export function RegisterForm() {
           className="mb-4 flex w-full items-center justify-center gap-3 rounded-xl border-2 border-gray-200 py-3.5 font-semibold text-gray-700 transition-all hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
         >
           <GoogleIcon />
-          Google ile Kayıt Ol
+          {t("auth.registerWithGoogle")}
         </button>
 
         <div className="mb-4 flex items-center gap-3">
           <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
-          <span className="text-xs text-gray-400">veya e-posta ile</span>
+          <span className="text-xs text-gray-400">{t("auth.orEmail")}</span>
           <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
         </div>
 
         <div className="space-y-3">
           <FormInput
-            label="Ad Soyad"
+            label={t("auth.fullName")}
             value={form.fullName}
             onChange={(v) => setForm((f) => ({ ...f, fullName: v }))}
             error={errors.fullName}
@@ -312,7 +321,7 @@ export function RegisterForm() {
             autoComplete="name"
           />
           <FormInput
-            label="E-posta"
+            label={t("auth.email")}
             type="email"
             value={form.email}
             onChange={(v) => setForm((f) => ({ ...f, email: v }))}
@@ -321,7 +330,7 @@ export function RegisterForm() {
             autoComplete="email"
           />
           <FormInput
-            label="Şifre"
+            label={t("auth.password")}
             type="password"
             value={form.password}
             onChange={(v) => setForm((f) => ({ ...f, password: v }))}
@@ -333,7 +342,7 @@ export function RegisterForm() {
           {form.password ? <PasswordStrengthBar strength={passwordStrength} /> : null}
 
           <FormInput
-            label="Şifre Tekrar"
+            label={t("auth.passwordConfirm")}
             type="password"
             value={form.passwordConfirm}
             onChange={(v) => setForm((f) => ({ ...f, passwordConfirm: v }))}
@@ -344,7 +353,8 @@ export function RegisterForm() {
 
           <div>
             <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">
-              Davet Kodu <span className="font-normal text-gray-400">(opsiyonel)</span>
+              {t("auth.inviteCode")}{" "}
+              <span className="font-normal text-gray-400">{t("auth.optionalShort")}</span>
             </label>
             <div className="relative">
               <input
@@ -376,19 +386,19 @@ export function RegisterForm() {
           disabled={loading}
           className="mt-5 w-full rounded-xl bg-gradient-to-r from-green-800 to-green-600 py-4 text-base font-bold text-white shadow-lg shadow-green-500/30 transition-all active:scale-[0.98] disabled:opacity-50"
         >
-          {loading ? "⏳ Kayıt olunuyor..." : "Hesap Oluştur →"}
+          {loading ? t("auth.signingUp") : `${t("auth.createAccount")} →`}
         </button>
 
         <p className="mt-4 text-center text-xs text-gray-400">
-          Devam ederek{" "}
+          {t("auth.registerLegalIntro")}{" "}
           <Link href="/profil#ayarlar" className="font-semibold text-green-600">
-            Kullanım Koşulları
+            {t("profile.terms")}
           </Link>{" "}
-          ve{" "}
+          {t("auth.registerLegalMid")}{" "}
           <Link href="/profil#ayarlar" className="font-semibold text-green-600">
-            Gizlilik Politikası
+            {t("profile.privacy")}
           </Link>
-          &apos;nı kabul etmiş sayılırsınız.
+          {t("auth.registerLegalOutro")}
         </p>
       </div>
     </div>

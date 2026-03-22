@@ -121,6 +121,7 @@ function mapTransactionRow(
     is_paid: t.is_paid !== false,
     recurring: (recurring as RecurringOption) || "none",
     recurring_end: (t.recurring_end as string | null) ?? null,
+    plan_id: (t.plan_id as string | null) ?? null,
     contacts: t.contact_id
       ? (() => {
           const c = contactMap.get(t.contact_id as string);

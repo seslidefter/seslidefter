@@ -53,5 +53,6 @@ export interface TransactionRow {
   is_paid: boolean;
   recurring: RecurringOption | string | null;
   recurring_end?: string | null;
+  plan_id?: string | null;
   contacts?: { name: string; phone?: string | null } | null;
 }

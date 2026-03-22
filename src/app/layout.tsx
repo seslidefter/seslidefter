@@ -1,6 +1,7 @@
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/providers/Toaster";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
@@ -19,21 +20,18 @@ const geistMono = Geist_Mono({
 const themeBootScript = `(function(){try{var k='sd-theme';var d=localStorage.getItem(k)==='dark';var t=d?'dark':'light';var r=document.documentElement;r.setAttribute('data-theme',t);r.classList.toggle('dark',d);}catch(e){}})();`;
 
 export const metadata: Metadata = {
-  title: "SesliDefter - Sesle Gelir Gider Takibi",
-  description:
-    "Konuş, kaydet. Esnaf ve bireysel kullanıcılar için yapay zeka destekli defter.",
+  title: "SesliDefter",
+  description: "Sesle gelir gider takibi",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "SesliDefter",
+    startupImage: "/icon.svg",
   },
   icons: {
-    icon: [
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
-    apple: [{ url: "/icon-192.png", sizes: "180x180", type: "image/png" }],
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg", type: "image/svg+xml" }],
   },
 };
 
@@ -64,8 +62,10 @@ export default function RootLayout({
         />
         <ThemeProvider>
           <AuthProvider>
-            {children}
-            <Toaster />
+            <LanguageProvider>
+              {children}
+              <Toaster />
+            </LanguageProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

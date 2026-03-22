@@ -6,20 +6,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useDashboardVoiceFabStore } from "@/store/dashboardVoiceFabStore";
 
-const left = [
-  { href: "/dashboard", label: "Ana Sayfa", short: "Ana", emoji: "🏠" },
-  { href: "/islemler", label: "İşlemler", short: "İşlem", emoji: "📋" },
-  { href: "/odemeler", label: "Ödemeler", short: "Ödeme", emoji: "💳" },
-];
-
-const right = [
-  { href: "/rapor", label: "Rapor", short: "Rapor", emoji: "📊" },
-  { href: "/profil", label: "Profil", short: "Profil", emoji: "👤" },
-];
-
 export function MobileNav() {
+  const { t } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
   const [hasUrgentPayment, setHasUrgentPayment] = useState(false);
@@ -45,6 +36,42 @@ export function MobileNav() {
     void checkPayments();
   }, [pathname]);
 
+  const left = [
+    {
+      href: "/dashboard",
+      label: t("nav.dashboard"),
+      short: t("nav.dashboardShort"),
+      emoji: "🏠",
+    },
+    {
+      href: "/islemler",
+      label: t("nav.transactions"),
+      short: t("nav.transactionsShort"),
+      emoji: "📋",
+    },
+    {
+      href: "/odemeler",
+      label: t("nav.payments"),
+      short: t("nav.paymentsShort"),
+      emoji: "💳",
+    },
+  ];
+
+  const right = [
+    {
+      href: "/rapor",
+      label: t("nav.report"),
+      short: t("nav.reportShort"),
+      emoji: "📊",
+    },
+    {
+      href: "/profil",
+      label: t("nav.profile"),
+      short: t("nav.profileShort"),
+      emoji: "👤",
+    },
+  ];
+
   const onFab = () => {
     if (pathname === "/dashboard") {
       useDashboardVoiceFabStore.getState().requestFromFab();
@@ -56,7 +83,7 @@ export function MobileNav() {
   return (
     <nav
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-40 min-h-[calc(64px+env(safe-area-inset-bottom))] border-t pb-[env(safe-area-inset-bottom)] pt-2 shadow-[var(--shadow)] backdrop-blur-[10px] backdrop-saturate-150 md:hidden"
+        "mobile-nav fixed bottom-0 left-0 right-0 z-40 min-h-[calc(64px+env(safe-area-inset-bottom))] border-t pb-[env(safe-area-inset-bottom)] pt-2 shadow-[var(--shadow)] backdrop-blur-[10px] backdrop-saturate-150 md:hidden"
       )}
       style={{
         borderColor: "var(--border-color)",
@@ -100,7 +127,7 @@ export function MobileNav() {
             type="button"
             onClick={onFab}
             className="sd-fab-pulse sd-gradient flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-transform duration-200 active:scale-95"
-            aria-label="Sesle kayıt"
+            aria-label={t("dashboard.voiceFab")}
           >
             <Mic className="h-7 w-7" strokeWidth={2.4} />
           </button>
