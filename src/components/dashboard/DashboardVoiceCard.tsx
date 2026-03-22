@@ -12,7 +12,7 @@ const CAT_TOAST: Record<TransactionCategory, string> = {
   gelir: "Gelir",
   gider: "Gider",
   alacak: "Alacak",
-  verecek: "Verecek",
+  verecek: "Borç",
 };
 
 function formatAmountTry(n: number) {

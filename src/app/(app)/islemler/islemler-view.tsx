@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { errToast, txDeletedToast } from "@/lib/sd-toast";
 import { groupTransactionsByLabel } from "@/lib/date-groups";
-import { cn } from "@/lib/utils";
+import { cn, getCategoryLabel } from "@/lib/utils";
 import type { TransactionCategory, TransactionRow } from "@/types/database";
 import { useAuthStore } from "@/store/authStore";
 import { useTransactionStore } from "@/store/transactionStore";
@@ -63,7 +63,8 @@ export function IslemlerView() {
       const name = (t.contacts?.name ?? "").toLowerCase();
       const desc = (t.description ?? "").toLowerCase();
       const tr = (t.transcript ?? "").toLowerCase();
-      return name.includes(q) || desc.includes(q) || tr.includes(q);
+      const tag = (t.category_tag ?? "").toLowerCase();
+      return name.includes(q) || desc.includes(q) || tr.includes(q) || tag.includes(q);
     });
   }, [transactions, filter, filterDate, search]);
 
@@ -94,10 +95,10 @@ export function IslemlerView() {
 
   const chips: { id: Filter; label: string }[] = [
     { id: "all", label: "Tümü" },
-    { id: "gelir", label: "Gelir" },
-    { id: "gider", label: "Gider" },
-    { id: "alacak", label: "Alacak" },
-    { id: "verecek", label: "Verecek" },
+    { id: "gelir", label: getCategoryLabel("gelir") },
+    { id: "gider", label: getCategoryLabel("gider") },
+    { id: "alacak", label: getCategoryLabel("alacak") },
+    { id: "verecek", label: getCategoryLabel("verecek") },
   ];
 
   return (
@@ -142,8 +143,16 @@ export function IslemlerView() {
             className={cn(
               "shrink-0 rounded-full px-4 py-2.5 text-xs font-bold transition-all duration-200",
               filter === c.id
-                ? "bg-[var(--sd-primary)] text-white shadow-md"
-                : "shadow-[var(--shadow)] hover:opacity-90"
+                ? c.id === "all"
+                  ? "bg-gray-800 text-white dark:bg-white dark:text-gray-800"
+                  : c.id === "gelir"
+                    ? "bg-green-600 text-white shadow-md"
+                    : c.id === "gider"
+                      ? "bg-red-500 text-white shadow-md"
+                      : c.id === "alacak"
+                        ? "bg-blue-600 text-white shadow-md"
+                        : "bg-orange-500 text-white shadow-md"
+                : "border border-[var(--border-color)] shadow-[var(--shadow)] hover:opacity-90"
             )}
             style={
               filter === c.id
@@ -158,6 +167,61 @@ export function IslemlerView() {
           </button>
         ))}
       </div>
+
+      {filterDate ? (
+        <div className="mb-3 flex items-center gap-2 rounded-xl bg-green-50 px-3 py-2 dark:bg-green-900/20">
+          <span className="text-xs font-semibold text-green-800 dark:text-green-300">
+            📅{" "}
+            {new Date(filterDate + "T12:00:00").toLocaleDateString("tr-TR", {
+              day: "numeric",
+              month: "long",
+            })}{" "}
+            filtresi aktif
+          </span>
+          <button
+            type="button"
+            onClick={() => setFilterDate(null)}
+            className="ml-auto text-xs font-bold text-green-700 dark:text-green-400"
+          >
+            Temizle ✕
+          </button>
+        </div>
+      ) : null}
+
+      {filtered.length > 0 ? (
+        <div className="mb-4 flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {[
+            {
+              label: "Gelir",
+              amount: filtered.filter((t) => t.category === "gelir").reduce((s, t) => s + Number(t.amount), 0),
+              color: "text-[var(--sd-gelir)]",
+            },
+            {
+              label: "Gider",
+              amount: filtered.filter((t) => t.category === "gider").reduce((s, t) => s + Number(t.amount), 0),
+              color: "text-[var(--sd-gider)]",
+            },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className="shrink-0 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] px-4 py-2.5"
+              style={{ boxShadow: "var(--shadow)" }}
+            >
+              <div className="text-xs text-[var(--text-secondary)]">{s.label}</div>
+              <div className={cn("sd-num text-sm font-bold", s.color)}>
+                {new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(s.amount)}
+              </div>
+            </div>
+          ))}
+          <div
+            className="shrink-0 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] px-4 py-2.5"
+            style={{ boxShadow: "var(--shadow)" }}
+          >
+            <div className="text-xs text-[var(--text-secondary)]">{filtered.length} işlem</div>
+            <div className="text-sm font-bold text-[var(--text-primary)]">Özet</div>
+          </div>
+        </div>
+      ) : null}
 
       {groups.length === 0 ? (
         <Card className="flex flex-col items-center gap-3 py-14 text-center transition-all duration-200 hover:-translate-y-px">
@@ -179,6 +243,7 @@ export function IslemlerView() {
                     transaction={t}
                     onDelete={onDelete}
                     onEdit={setEditTx}
+                    showCreatedTime
                   />
                 ))}
               </div>

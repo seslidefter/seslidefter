@@ -60,10 +60,30 @@ export function analyzeTranscript(text: string): AnalyzedVoiceForm {
   const amount = amountRaw != null ? parseFloat(amountRaw) : null;
 
   let category: TransactionCategory | null = null;
-  if (/alacak|alacağım|borçlu|ödeyecek|verecek bana/.test(lower)) category = "alacak";
+  if (
+    /\bgelir\b/.test(lower) ||
+    /gelir ekle/.test(lower) ||
+    /kazandım/.test(lower) ||
+    /maaş/.test(lower) ||
+    /tahsilat/.test(lower) ||
+    /sattım/.test(lower) ||
+    /\bgeldi\b/.test(lower) ||
+    /para geldi/.test(lower) ||
+    /aldım para/.test(lower)
+  ) {
+    category = "gelir";
+  } else if (
+    /\bgider\b/.test(lower) ||
+    /harcadım/.test(lower) ||
+    /ödedim/.test(lower) ||
+    /\baldım\b/.test(lower) ||
+    /masraf/.test(lower) ||
+    /fatura/.test(lower) ||
+    /market/.test(lower)
+  ) {
+    category = "gider";
+  } else if (/alacak|alacağım|borçlu|ödeyecek|verecek bana/.test(lower)) category = "alacak";
   else if (/verecek|vereceğim|borçluyum|ödeyeceğim|ödemem/.test(lower)) category = "verecek";
-  else if (/gelir|kazandım|aldım|tahsil/.test(lower)) category = "gelir";
-  else if (/gider|harcadım|ödedim|masraf/.test(lower)) category = "gider";
 
   const words = trimmed.split(/\s+/);
   const names = words.filter(
@@ -79,12 +99,17 @@ export function analyzeTranscript(text: string): AnalyzedVoiceForm {
   };
 }
 
-export function categoryLabel(c: TransactionCategory): string {
-  const m: Record<TransactionCategory, string> = {
+/** UI etiketi — DB’de `verecek` kalır, ekranda “Borç” */
+export function getCategoryLabel(category: string): string {
+  const labels: Record<string, string> = {
     gelir: "Gelir",
     gider: "Gider",
     alacak: "Alacak",
-    verecek: "Verecek",
+    verecek: "Borç",
   };
-  return m[c];
+  return labels[category] ?? category;
+}
+
+export function categoryLabel(c: TransactionCategory): string {
+  return getCategoryLabel(c);
 }

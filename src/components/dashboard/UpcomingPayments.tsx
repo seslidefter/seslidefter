@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { errToast } from "@/lib/sd-toast";
-import { formatShortDate, formatTry, todayISODate } from "@/lib/utils";
+import { formatShortDate, formatTry, getCategoryLabel, todayISODate } from "@/lib/utils";
 import type { TransactionRow } from "@/types/database";
 import { useTransactionStore } from "@/store/transactionStore";
 
@@ -85,7 +85,7 @@ export function UpcomingPayments() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-bold text-[var(--sd-text)]">
-                    {t.description?.trim() || t.category}
+                    {t.description?.trim() || getCategoryLabel(t.category)}
                   </p>
                   <p className="text-xs font-semibold text-black/45">
                     {t.contacts?.name ?? "—"}

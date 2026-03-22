@@ -10,7 +10,7 @@ import { useAuthStore } from "@/store/authStore";
 const nav = [
   { href: "/dashboard", label: "Dashboard", emoji: "🏠" },
   { href: "/islemler", label: "İşlemler", emoji: "📋" },
-  { href: "/alacak-verecek", label: "Alacak/Verecek", emoji: "👥" },
+  { href: "/alacak-verecek", label: "Alacak/Borç", emoji: "👥" },
   { href: "/odemeler", label: "Ödemeler", emoji: "💳" },
   { href: "/rapor", label: "Rapor", emoji: "📊" },
   { href: "/profil", label: "Profil", emoji: "👤" },

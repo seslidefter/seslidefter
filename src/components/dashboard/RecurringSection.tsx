@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { Card } from "@/components/ui/Card";
-import { cn, formatShortDate, formatTry } from "@/lib/utils";
+import { cn, formatShortDate, formatTry, getCategoryLabel } from "@/lib/utils";
 import type { TransactionRow } from "@/types/database";
 
 const REC_LABEL: Record<string, string> = {
@@ -42,7 +42,7 @@ export function RecurringSection({ transactions }: { transactions: TransactionRo
             >
               <div className="min-w-0">
                 <p className="font-bold text-[var(--text-primary)]">
-                  {t.description?.trim() || t.category_tag || t.category}
+                  {t.description?.trim() || t.category_tag || getCategoryLabel(t.category)}
                 </p>
                 <p className="text-xs font-semibold text-[var(--text-secondary)]">
                   {lab}

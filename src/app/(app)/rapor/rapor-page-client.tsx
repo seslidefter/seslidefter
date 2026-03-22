@@ -1,6 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { SmartPredictions } from "@/components/ai/SmartPredictions";
 import { CategoryChart, type CategorySlice } from "@/components/rapor/CategoryChart";
 import { TrendChart, type TrendMonthRow } from "@/components/rapor/TrendChart";
@@ -219,6 +229,42 @@ export function RaporPageClient() {
       .slice(0, 5);
   }, [filtered]);
 
+  const monthlyBarData = useMemo(
+    () =>
+      trendLast6Months.map((r) => ({
+        month: r.label,
+        gelir: r.gelir,
+        gider: r.gider,
+        net: r.net,
+      })),
+    [trendLast6Months]
+  );
+
+  const dailyIntensity = useMemo(() => {
+    const days: Record<string, number> = {};
+    const now = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split("T")[0]!;
+      days[key] = 0;
+    }
+    for (const t of transactions) {
+      if (Object.prototype.hasOwnProperty.call(days, t.date)) {
+        days[t.date] += Number(t.amount);
+      }
+    }
+    return Object.entries(days).map(([date, amount]) => ({
+      date,
+      day: new Date(date + "T12:00:00").toLocaleDateString("tr-TR", {
+        day: "numeric",
+        month: "short",
+      }),
+      amount,
+      count: transactions.filter((tr) => tr.date === date).length,
+    }));
+  }, [transactions]);
+
   if (!initialized || (loading && transactions.length === 0)) {
     return (
       <PageShell
@@ -294,6 +340,106 @@ export function RaporPageClient() {
           </p>
         </Card>
       </div>
+
+      <Card className="p-4">
+        <h2 className="sd-heading mb-4 text-sm font-bold text-[var(--text-primary)]">
+          📊 Gelir / Gider / Net (son 6 ay)
+        </h2>
+        {!trendHasData ? (
+          <p className="text-sm text-[var(--text-secondary)]">Veri yok.</p>
+        ) : (
+          <div className="h-[240px] w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyBarData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--border-color)"
+                  vertical={false}
+                />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => `₺${(v / 1000).toFixed(0)}k`}
+                />
+                <Tooltip
+                  formatter={(value, name) => {
+                    const n = typeof value === "number" ? value : Number(value);
+                    const label =
+                      name === "gelir" ? "Gelir" : name === "gider" ? "Gider" : "Net";
+                    return [formatTry(Number.isFinite(n) ? n : 0), label];
+                  }}
+                  contentStyle={{
+                    borderRadius: 12,
+                    border: "none",
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
+                    background: "var(--bg-card)",
+                    color: "var(--text-primary)",
+                  }}
+                />
+                <Legend
+                  formatter={(v) =>
+                    v === "gelir" ? "Gelir" : v === "gider" ? "Gider" : "Net"
+                  }
+                />
+                <Bar dataKey="gelir" fill="#2E7D32" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                <Bar dataKey="gider" fill="#D32F2F" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                <Bar dataKey="net" fill="#1565C0" radius={[4, 4, 0, 0]} maxBarSize={32} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-4">
+        <h2 className="sd-heading mb-4 text-sm font-bold text-[var(--text-primary)]">
+          🔥 Son 30 gün işlem yoğunluğu
+        </h2>
+        <div className="h-[160px] w-full min-w-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={dailyIntensity} margin={{ top: 0, right: 0, left: -30, bottom: 0 }}>
+              <XAxis
+                dataKey="day"
+                tick={{ fontSize: 9 }}
+                tickLine={false}
+                axisLine={false}
+                interval={4}
+              />
+              <YAxis hide />
+              <Tooltip
+                formatter={(value) => {
+                  const n = typeof value === "number" ? value : Number(value);
+                  return [formatTry(Number.isFinite(n) ? n : 0), "Hacim"];
+                }}
+                contentStyle={{
+                  borderRadius: 12,
+                  border: "none",
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
+                  background: "var(--bg-card)",
+                  color: "var(--text-primary)",
+                }}
+              />
+              <Bar dataKey="amount" radius={[3, 3, 0, 0]} maxBarSize={20} fill="#2E7D32" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {dailyIntensity
+            .filter((d) => d.count > 0)
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5)
+            .map((d) => (
+              <div
+                key={d.date}
+                className="flex items-center gap-1.5 rounded-lg bg-green-50 px-2.5 py-1.5 dark:bg-green-900/20"
+              >
+                <span className="text-xs font-bold text-green-700 dark:text-green-400">{d.day}</span>
+                <span className="text-xs text-green-600 dark:text-green-500">{d.count} işlem</span>
+              </div>
+            ))}
+        </div>
+      </Card>
 
       <Card className="p-4">
         <h2 className="sd-heading mb-3 text-lg">Gelir vs gider (son 6 ay)</h2>
@@ -376,7 +522,7 @@ export function RaporPageClient() {
           )}
         </Card>
         <Card className="p-4">
-          <h2 className="sd-heading mb-3 text-lg">En çok verecek (kişi)</h2>
+          <h2 className="sd-heading mb-3 text-lg">En çok borç (kişi)</h2>
           {topVerecekByAmount.length === 0 ? (
             <p className="text-sm text-[var(--text-secondary)]">Veri yok.</p>
           ) : (
@@ -398,7 +544,7 @@ export function RaporPageClient() {
       </div>
 
       <Card className="p-4">
-        <h2 className="sd-heading mb-3 text-lg">Alacak vs verecek (aylık)</h2>
+        <h2 className="sd-heading mb-3 text-lg">Alacak vs borç (aylık)</h2>
         {barData.length === 0 ? (
           <p className="text-sm text-[var(--text-secondary)]">Veri yok.</p>
         ) : (

@@ -15,10 +15,11 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    void supabase.auth.getSession().then(({ data }) => {
+    void (async () => {
+      const { data } = await supabase.auth.getSession();
       if (data.session) setReady(true);
       else router.replace("/forgot-password");
-    });
+    })();
   }, [router]);
 
   function getStrength(p: string): number {

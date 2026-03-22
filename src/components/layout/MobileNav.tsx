@@ -3,6 +3,8 @@
 import { Mic } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useDashboardVoiceFabStore } from "@/store/dashboardVoiceFabStore";
 
@@ -20,6 +22,28 @@ const right = [
 export function MobileNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const [hasUrgentPayment, setHasUrgentPayment] = useState(false);
+
+  useEffect(() => {
+    async function checkPayments() {
+      const supabase = getSupabaseClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const today = new Date().toISOString().split("T")[0];
+      const { count, error } = await supabase
+        .from("payment_plan_payments")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", session.user.id)
+        .eq("is_paid", false)
+        .lte("due_date", today);
+
+      if (!error) setHasUrgentPayment((count ?? 0) > 0);
+    }
+    void checkPayments();
+  }, [pathname]);
 
   const onFab = () => {
     if (pathname === "/dashboard") {
@@ -51,10 +75,16 @@ export function MobileNav() {
                 key={href}
                 href={href}
                 className={cn(
-                  "flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-bold transition-colors duration-200",
+                  "relative flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-bold transition-colors duration-200",
                   isActive ? "text-[var(--sd-primary)]" : "text-[var(--text-secondary)]"
                 )}
               >
+                {href === "/odemeler" && hasUrgentPayment ? (
+                  <span
+                    className="absolute right-1 top-0 h-2.5 w-2.5 rounded-full border-2 border-[var(--bg-card)] bg-red-500 dark:border-[var(--sd-bg)]"
+                    aria-hidden
+                  />
+                ) : null}
                 <span className="text-lg leading-none" aria-hidden>
                   {emoji}
                 </span>

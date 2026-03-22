@@ -4,7 +4,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tagColorFor, tagIconFor } from "@/lib/tag-display";
 import { sendWhatsAppReminder } from "@/lib/whatsapp";
-import { cn, formatShortDate, formatTry } from "@/lib/utils";
+import { cn, formatShortDate, formatTry, getCategoryLabel } from "@/lib/utils";
 import type { TransactionRow } from "@/types/database";
 
 function amountStyle(t: TransactionRow): { sign: string; color: string } {
@@ -21,11 +21,18 @@ interface TransactionCardProps {
   transaction: TransactionRow;
   onDelete: (id: string) => void;
   onEdit: (t: TransactionRow) => void;
+  /** İşlemler listesinde `created_at` saatini göster */
+  showCreatedTime?: boolean;
 }
 
 const revealWidth = 112;
 
-export function TransactionCard({ transaction: t, onDelete, onEdit }: TransactionCardProps) {
+export function TransactionCard({
+  transaction: t,
+  onDelete,
+  onEdit,
+  showCreatedTime = false,
+}: TransactionCardProps) {
   const [dx, setDx] = useState(0);
   const startX = useRef(0);
   const baseDx = useRef(0);
@@ -41,8 +48,11 @@ export function TransactionCard({ transaction: t, onDelete, onEdit }: Transactio
       : null;
 
   const title =
-    t.description?.trim() || t.transcript?.trim() || t.category || "İşlem";
+    t.description?.trim() || t.transcript?.trim() || getCategoryLabel(t.category) || "İşlem";
   const personLine = t.contacts?.name?.trim() || "—";
+  const timeLine = showCreatedTime
+    ? new Date(t.created_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+    : null;
   const icon = tagIconFor(t.category_tag);
   const iconBg = tagColorFor(t.category_tag);
 
@@ -112,8 +122,9 @@ export function TransactionCard({ transaction: t, onDelete, onEdit }: Transactio
         </div>
         <div className="min-w-0 flex-1 py-0.5">
           <p className="line-clamp-2 text-sm font-bold text-[var(--sd-text)]">{title}</p>
-          <p className="mt-0.5 text-[11px] font-semibold text-black/45">
+          <p className="mt-0.5 text-[11px] font-semibold text-black/45 dark:text-white/45">
             {personLine} · {formatShortDate(t.date)}
+            {timeLine ? ` · ${timeLine}` : ""}
           </p>
         </div>
         <div className="flex shrink-0 items-stretch gap-1">

@@ -76,7 +76,7 @@ function DebtTransactionRow({
           {contact?.name || "Bilinmeyen"}
         </div>
         <div className="mt-0.5 truncate text-xs text-gray-500">
-          {tx.description || (isAlacak ? "Alacak" : "Verecek")}
+          {tx.description || (isAlacak ? "Alacak" : "Borç")}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <span
@@ -86,7 +86,7 @@ function DebtTransactionRow({
                 : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
             }`}
           >
-            {isAlacak ? "📥 Alacak" : "📤 Verecek"}
+            {isAlacak ? "📥 Alacak" : "📤 Borç"}
           </span>
           <span className="text-xs text-gray-400">
             {new Date(tx.date + "T12:00:00").toLocaleDateString("tr-TR", {
@@ -250,7 +250,7 @@ function EditDebtModal({
             <div className="grid grid-cols-2 gap-2">
               {[
                 { value: "alacak" as const, label: "📥 Alacak", color: "blue" as const },
-                { value: "verecek" as const, label: "📤 Verecek", color: "orange" as const },
+                { value: "verecek" as const, label: "📤 Borç", color: "orange" as const },
               ].map((opt) => (
                 <button
                   key={opt.value}
@@ -751,7 +751,7 @@ export default function AlacakVerecekPage() {
   if (!initialized || (loading && contacts.length === 0)) {
     return (
       <PageShell
-        title="Alacak / Verecek"
+        title="Alacak / Borç"
         contentClassName="flex flex-col gap-4"
         titleClassName="hidden md:block"
       >
@@ -766,7 +766,7 @@ export default function AlacakVerecekPage() {
 
   return (
     <PageShell
-      title="Alacak / Verecek"
+      title="Alacak / Borç"
       contentClassName="flex flex-col gap-4 pb-28"
       titleClassName="hidden md:block"
     >
@@ -781,7 +781,7 @@ export default function AlacakVerecekPage() {
         </Card>
         <Card className="border-l-4 border-l-[var(--sd-verecek)] p-4 transition-all duration-200 hover:-translate-y-px">
           <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
-            Toplam verecek
+            Toplam borç
           </p>
           <p className="sd-num sd-heading mt-1 text-xl font-extrabold text-[var(--sd-verecek)]">
             {formatTry(totals.ve)}

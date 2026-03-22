@@ -140,9 +140,25 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   fetchAll: async () => {
     const supabase = createClient();
     set({ loading: true });
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      set({ loading: false, transactions: [], contacts: [] });
+      return { error: "Oturum yok" };
+    }
+
     const [txRes, cRes] = await Promise.all([
-      supabase.from("transactions").select("*").order("created_at", { ascending: false }),
-      supabase.from("contacts").select("*").order("name", { ascending: true }),
+      supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("contacts")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("name", { ascending: true }),
     ]);
 
     if (txRes.error) {
@@ -156,11 +172,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       return { error: cRes.error.message };
     }
 
-    const contactMap = new Map(
-      (cRes.data ?? []).map((c) => [c.id, { name: c.name, phone: c.phone ?? null }])
+    const contactMap = new Map<string, { name: string; phone: string | null }>(
+      (cRes.data ?? []).map((c: ContactRow) => [c.id, { name: c.name, phone: c.phone ?? null }])
     );
-    const merged: TransactionRow[] = (txRes.data ?? []).map((t) =>
-      mapTransactionRow(t as Record<string, unknown>, contactMap)
+    const merged: TransactionRow[] = (txRes.data ?? []).map((t: Record<string, unknown>) =>
+      mapTransactionRow(t, contactMap)
     );
 
     set({

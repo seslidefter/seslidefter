@@ -77,7 +77,7 @@ export function AlacakVerecekBar({ data }: { data: AvPoint[] }) {
           <YAxis tick={{ fontSize: 10 }} stroke="#64748b" />
           <Tooltip />
           <Bar dataKey="alacak" fill="var(--sd-alacak)" name="Alacak" radius={[6, 6, 0, 0]} />
-          <Bar dataKey="verecek" fill="var(--sd-verecek)" name="Verecek" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="verecek" fill="var(--sd-verecek)" name="Borç" radius={[6, 6, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

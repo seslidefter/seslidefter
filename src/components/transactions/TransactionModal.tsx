@@ -19,7 +19,7 @@ const CATS: { id: TransactionCategory; label: string; emoji: string }[] = [
   { id: "gelir", label: "Gelir", emoji: "💰" },
   { id: "gider", label: "Gider", emoji: "💸" },
   { id: "alacak", label: "Alacak", emoji: "📥" },
-  { id: "verecek", label: "Verecek", emoji: "📤" },
+  { id: "verecek", label: "Borç", emoji: "📤" },
 ];
 
 interface TransactionModalProps {
@@ -99,7 +99,7 @@ export function TransactionModal({ open, onClose, contacts, initialContactId }: 
     }
 
     if (showContact && !contactId) {
-      toast.error("Alacak / verecek için kişi seçin");
+      toast.error("Alacak / borç için kişi seçin");
       return;
     }
 

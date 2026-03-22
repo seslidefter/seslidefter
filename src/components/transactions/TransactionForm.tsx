@@ -48,7 +48,7 @@ const CAT_UI: { id: TransactionCategory; label: string; emoji: string }[] = [
   { id: "gelir", label: "Gelir", emoji: "💰" },
   { id: "gider", label: "Gider", emoji: "💸" },
   { id: "alacak", label: "Alacak", emoji: "📥" },
-  { id: "verecek", label: "Verecek", emoji: "📤" },
+  { id: "verecek", label: "Borç", emoji: "📤" },
 ];
 
 interface TransactionFormProps {

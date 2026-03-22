@@ -57,11 +57,11 @@ export function generateLocalFinancialReply(message: string, ctx: FinancialAiCon
   }
 
   if (/alacak/.test(m)) {
-    return `Toplam alacak kayıtlarınız ₺${fmt(ctx.alacak)}. Vadesi geçenleri kişi bazında hatırlatmak için Alacak/Verecek ekranını kullanabilirsiniz.`;
+    return `Toplam alacak kayıtlarınız ₺${fmt(ctx.alacak)}. Vadesi geçenleri kişi bazında hatırlatmak için Alacak/Borç ekranını kullanabilirsiniz.`;
   }
 
   if (/borç|verecek|ödemem/.test(m)) {
-    return `Verecek (borç) toplamınız ₺${fmt(ctx.verecek)}. Önceliklendirmek için tutar ve vadeye göre sıralayıp küçük ödemelerle başlamak psikolojik olarak rahatlatır.`;
+    return `Borç toplamınız ₺${fmt(ctx.verecek)}. Önceliklendirmek için tutar ve vadeye göre sıralayıp küçük ödemelerle başlamak psikolojik olarak rahatlatır.`;
   }
 
   if (/geçen ay|önceki ay|karşılaştır/.test(m)) {

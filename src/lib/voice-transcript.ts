@@ -37,7 +37,7 @@ const WORD_TO_NUM: Record<string, number> = {
   milyon: 1_000_000,
 };
 
-/** Geliştirilmiş ses / metin analizi */
+/** Geliştirilmiş ses / metin analizi — önce kategori (gelir öncelikli), sonra tutar */
 export function analyzeVoiceTranscript(text: string): VoiceAnalysisResult {
   const raw = text.trim();
   if (!raw) {
@@ -46,60 +46,87 @@ export function analyzeVoiceTranscript(text: string): VoiceAnalysisResult {
 
   const lower = raw.toLowerCase();
 
-  const formattedAmounts = [...raw.matchAll(/(\d{1,3}(?:[.,]\d{3})+)/g)]
-    .map((m) => parseFloat(m[1]!.replace(/[.,]/g, "")))
-    .filter((n) => !Number.isNaN(n) && n > 0);
+  let category: TransactionCategory | null = null;
 
-  const plainAmounts = [...raw.matchAll(/\b(\d+(?:[.,]\d+)?)\b/g)]
-    .map((m) => parseFloat(m[1]!.replace(",", ".")))
-    .filter((n) => !Number.isNaN(n) && n > 0);
-
-  let wordAmount: number | null = null;
-  const binMatch = lower.match(/(\w+)\s*bin\b/);
-  if (binMatch) {
-    const w = binMatch[1]!;
-    const multiplier = WORD_TO_NUM[w] ?? parseInt(w, 10);
-    if (!Number.isNaN(multiplier) && multiplier > 0) wordAmount = multiplier * 1000;
+  if (
+    /\bgelir\b/.test(lower) ||
+    /gelir ekle/.test(lower) ||
+    /kazandım/.test(lower) ||
+    /maaş/.test(lower) ||
+    /tahsilat/.test(lower) ||
+    /sattım/.test(lower) ||
+    /\bgeldi\b/.test(lower) ||
+    /para geldi/.test(lower) ||
+    /aldım para/.test(lower) ||
+    /tahsil ettim/.test(lower)
+  ) {
+    category = "gelir";
+  } else if (
+    /\bgider\b/.test(lower) ||
+    /gider ekle/.test(lower) ||
+    /harcadım/.test(lower) ||
+    /ödedim/.test(lower) ||
+    /\baldım\b/.test(lower) ||
+    /masraf/.test(lower) ||
+    /fatura/.test(lower) ||
+    /market/.test(lower) ||
+    /düştü/.test(lower)
+  ) {
+    category = "gider";
+  } else if (
+    /\balacak\b/.test(lower) ||
+    /alacağım/.test(lower) ||
+    /\bborçlu\b/.test(lower) ||
+    /verecek bana/.test(lower) ||
+    /ödeyecek bana/.test(lower)
+  ) {
+    category = "alacak";
+  } else if (
+    /\bverecek\b/.test(lower) ||
+    /vereceğim/.test(lower) ||
+    /borçluyum/.test(lower) ||
+    /ödeyeceğim/.test(lower) ||
+    /ödemem lazım/.test(lower)
+  ) {
+    category = "verecek";
   }
-
-  const yuzMatch = lower.match(/(\w+)\s*yüz\b/);
-  if (yuzMatch && !binMatch) {
-    const w = yuzMatch[1]!;
-    const multiplier = WORD_TO_NUM[w] ?? parseInt(w, 10);
-    if (!Number.isNaN(multiplier) && multiplier > 0) wordAmount = multiplier * 100;
-  }
-
-  const allAmounts = [
-    ...formattedAmounts,
-    ...plainAmounts,
-    ...(wordAmount != null ? [wordAmount] : []),
-  ].filter((n) => n > 0 && n < 10_000_000);
 
   let amount: number | null = null;
-  if (allAmounts.length > 0) {
-    const liraMatch = raw.match(/(\d[\d.,]*)\s*(?:lira|tl|₺)/i);
-    if (liraMatch) {
-      const n = parseTryAmount(liraMatch[1]!);
-      amount = Number.isFinite(n) ? n : null;
-    }
-    if (amount == null && formattedAmounts.length > 0) {
-      amount = formattedAmounts[0]!;
-    } else if (amount == null && wordAmount != null) {
-      amount = wordAmount;
-    } else if (amount == null) {
-      amount = Math.max(...allAmounts);
+
+  const numericMatch = raw.match(
+    /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+)\s*(?:tl|lira|₺)/i
+  );
+  if (numericMatch?.[1]) {
+    const n = parseTryAmount(numericMatch[1].replace(/\./g, "").replace(",", "."));
+    if (Number.isFinite(n) && n > 0) amount = n;
+  }
+
+  if (amount == null) {
+    const plainMatch = raw.match(/\b(\d{2,})\b/);
+    if (plainMatch?.[1]) {
+      const n = parseFloat(plainMatch[1]);
+      if (Number.isFinite(n) && n > 0) amount = n;
     }
   }
 
-  let category: TransactionCategory | null = null;
-  if (/alacak|alacağım|borçlu|verecek bana|ödeyecek bana|tahsil/.test(lower)) category = "alacak";
-  else if (/verecek|vereceğim|borçluyum|ödeyeceğim|ödemem lazım/.test(lower)) category = "verecek";
-  else if (/kazandım|maaş|tahsilat|sattım|geldi|aldım para/.test(lower)) category = "gelir";
-  else if (/harcadım|ödedim|aldım|masraf|gider|fatura|market|düştü/.test(lower)) category = "gider";
+  if (amount == null) {
+    let binMatch: RegExpMatchArray | null = null;
+    const bm = lower.match(/(\w+)\s*bin\b/);
+    if (bm) binMatch = bm;
+    if (binMatch?.[1]) {
+      const mult = WORD_TO_NUM[binMatch[1]] ?? parseInt(binMatch[1], 10);
+      if (!Number.isNaN(mult) && mult > 0) amount = mult * 1000;
+    }
+    const ym = lower.match(/(\w+)\s*yüz\b/);
+    if (ym && !binMatch?.[1]) {
+      const mult = WORD_TO_NUM[ym[1]!] ?? parseInt(ym[1]!, 10);
+      if (!Number.isNaN(mult) && mult > 0) amount = mult * 100;
+    }
+  }
 
   let tag: string | null = null;
   if (/market|migros|bim|a101|şok|carrefour|bakkal/.test(lower)) tag = "Market";
-  else if (/kira/.test(lower)) tag = "Kira";
+  else if (/\bkira\b/.test(lower)) tag = "Kira";
   else if (/fatura|elektrik|su|doğalgaz|internet/.test(lower)) tag = "Fatura";
   else if (/benzin|akaryakıt|taksi|otobüs|metro/.test(lower)) tag = "Ulaşım";
   else if (/yemek|restoran|kafe|kahve/.test(lower)) tag = "Yemek";
@@ -128,24 +155,22 @@ export function analyzeVoiceTranscript(text: string): VoiceAnalysisResult {
     "doksan",
     "yüz",
     "bin",
+    "milyon",
+    "gelir",
+    "gider",
+    "alacak",
+    "verecek",
+    "ekle",
+    "ekleyin",
     "aldım",
     "ödedim",
     "verdim",
-    "alacak",
-    "verecek",
-    "gelir",
-    "gider",
-    "bugün",
-    "yarın",
     "para",
     "borç",
-    "alacağım",
-    "vereceğim",
     "bana",
     "benim",
-    "onun",
-    "ondan",
-    "sana",
+    "bugün",
+    "yarın",
     "market",
     "kira",
     "fatura",
@@ -153,6 +178,11 @@ export function analyzeVoiceTranscript(text: string): VoiceAnalysisResult {
     "ücret",
     "gelen",
     "giden",
+    "alacağım",
+    "vereceğim",
+    "onun",
+    "ondan",
+    "sana",
   ]);
 
   const words = raw.split(/\s+/);
@@ -167,7 +197,7 @@ export function analyzeVoiceTranscript(text: string): VoiceAnalysisResult {
       return true;
     }) ?? null;
 
-  console.log("Analiz:", { text: raw, amount, category, tag, contactName, allAmounts });
+  console.log("🎙️ Ses analizi:", { text: raw, amount, category, tag, contactName });
 
   return { amount, category, tag, contactName };
 }

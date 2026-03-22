@@ -74,11 +74,11 @@ export default function ProfilPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<ProfilProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabType>("hesap");
+  const [openSection, setOpenSection] = useState<TabType | null>("hesap");
 
   useEffect(() => {
     const h = window.location.hash.replace(/^#/, "") as TabType;
-    if (h === "plan" || h === "davet" || h === "ayarlar" || h === "hesap") setActiveTab(h);
+    if (h === "plan" || h === "davet" || h === "ayarlar" || h === "hesap") setOpenSection(h);
   }, []);
 
   useEffect(() => {
@@ -136,11 +136,16 @@ export default function ProfilPage() {
     };
   }, [router]);
 
-  const onTab = (id: TabType) => {
-    setActiveTab(id);
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", `#${id}`);
-    }
+  const onSectionToggle = (id: TabType) => {
+    setOpenSection((prev) => {
+      const next = prev === id ? null : id;
+      if (typeof window !== "undefined" && next) {
+        window.history.replaceState(null, "", `#${next}`);
+      } else if (typeof window !== "undefined" && !next) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+      return next;
+    });
   };
 
   if (loading || !profile) return <ProfilSkeleton />;
@@ -149,10 +154,10 @@ export default function ProfilPage() {
     ? new Date(String(profile.premium_until)) > new Date()
     : profile.plan === "premium";
 
-  const tabs: { id: TabType; label: string; icon: string }[] = [
-    { id: "hesap", label: "Hesap", icon: "👤" },
-    { id: "plan", label: "Plan", icon: "⭐" },
-    { id: "davet", label: "Davet", icon: "🎁" },
+  const sections: { id: TabType; label: string; icon: string }[] = [
+    { id: "hesap", label: "Hesap bilgileri", icon: "👤" },
+    { id: "plan", label: "Plan ve üyelik", icon: "⭐" },
+    { id: "davet", label: "Davet ve kazan", icon: "🎁" },
     { id: "ayarlar", label: "Ayarlar", icon: "⚙️" },
   ];
 
@@ -182,57 +187,66 @@ export default function ProfilPage() {
           </div>
         </div>
 
-        <div
-          className="mb-4 flex w-full gap-1 rounded-2xl border border-gray-100 bg-white p-1 dark:border-gray-700 dark:bg-gray-800"
-          role="tablist"
-          aria-label="Profil sekmeleri"
-        >
-          {tabs.map((tab) => {
-            const active = activeTab === tab.id;
-            return (
+        <div className="mt-4 space-y-2">
+          {sections.map((section) => (
+            <div
+              key={section.id}
+              className="overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800"
+            >
               <button
-                key={tab.id}
                 type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => onTab(tab.id)}
-                className={cn(
-                  "flex flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-xs font-semibold transition-all",
-                  active
-                    ? "bg-green-700 text-white"
-                    : "text-gray-500 dark:text-gray-400"
-                )}
+                aria-expanded={openSection === section.id}
+                onClick={() => onSectionToggle(section.id)}
+                className="flex w-full items-center justify-between px-4 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/40"
               >
-                <span className="text-lg" aria-hidden>
-                  {tab.icon}
+                <div className="flex items-center gap-3">
+                  <span className="text-xl" aria-hidden>
+                    {section.icon}
+                  </span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {section.label}
+                  </span>
+                </div>
+                <span
+                  className={cn(
+                    "text-gray-400 transition-transform duration-200",
+                    openSection === section.id ? "rotate-180" : ""
+                  )}
+                  aria-hidden
+                >
+                  ▼
                 </span>
-                <span>{tab.label}</span>
               </button>
-            );
-          })}
-        </div>
-
-        <div className="profil-tab-content animate-fadeIn" role="tabpanel">
-          {activeTab === "hesap" && (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <HesapTab profile={profile} isPremium={isPremium} />
+              {openSection === section.id ? (
+                <div
+                  className="animate-fadeIn border-t border-gray-100 p-4 dark:border-gray-700"
+                  role="region"
+                  aria-label={section.label}
+                >
+                  {section.id === "hesap" && (
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <HesapTab profile={profile} isPremium={isPremium} />
+                    </div>
+                  )}
+                  {section.id === "plan" && (
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <PlanTab profile={profile} isPremium={isPremium} />
+                    </div>
+                  )}
+                  {section.id === "davet" && (
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <DavetTab profile={profile} />
+                    </div>
+                  )}
+                  {section.id === "ayarlar" && (
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <AyarlarTab profile={profile} />
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
-          )}
-          {activeTab === "plan" && (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <PlanTab isPremium={isPremium} />
-            </div>
-          )}
-          {activeTab === "davet" && (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <DavetTab profile={profile} />
-            </div>
-          )}
-          {activeTab === "ayarlar" && (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <AyarlarTab profile={profile} />
-            </div>
-          )}
+          ))}
         </div>
       </div>
     </PageShell>
@@ -436,7 +450,7 @@ const HesapTab = memo(function HesapTab({
   );
 });
 
-const PlanTab = memo(function PlanTab({ isPremium }: { isPremium: boolean }) {
+const PlanTab = memo(function PlanTab({ isPremium }: { profile?: ProfilProfile; isPremium: boolean }) {
   const freeFeatures = [
     { ok: true, text: "Aylık 50 işlem kaydı" },
     { ok: true, text: "10 kişi takibi" },

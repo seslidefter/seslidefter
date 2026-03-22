@@ -3,18 +3,18 @@
 import { Mic } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo } from "react";
 import { UsageIndicator } from "@/components/plan/UsageIndicator";
 import { DashboardVoiceCard } from "@/components/dashboard/DashboardVoiceCard";
+import { RecentTransactionCard } from "@/components/dashboard/RecentTransactionCard";
 import { RecurringSection } from "@/components/dashboard/RecurringSection";
 import { UpcomingPayments } from "@/components/dashboard/UpcomingPayments";
+import { UpcomingPlanPayments } from "@/components/dashboard/UpcomingPlanPayments";
 import { PageShell } from "@/components/layout/PageShell";
-import { EditTransactionModal } from "@/components/transactions/EditTransactionModal";
-import { TransactionCard } from "@/components/transactions/TransactionCard";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { errToast, txDeletedToast } from "@/lib/sd-toast";
+import { errToast } from "@/lib/sd-toast";
 import { speak } from "@/lib/tts";
 import { formatTry } from "@/lib/utils";
 import type { TransactionRow } from "@/types/database";
@@ -42,9 +42,6 @@ function DashboardInner() {
   const contacts = useTransactionStore((s) => s.contacts);
   const loading = useTransactionStore((s) => s.loading);
   const fetchAll = useTransactionStore((s) => s.fetchAll);
-  const deleteTransaction = useTransactionStore((s) => s.deleteTransaction);
-  const [editTx, setEditTx] = useState<TransactionRow | null>(null);
-
   const loadTx = useCallback(() => {
     void fetchAll().then((r) => {
       if (r.error) errToast(r.error);
@@ -76,12 +73,6 @@ function DashboardInner() {
   }, [transactions]);
 
   const recent = useMemo(() => transactions.slice(0, 5), [transactions]);
-
-  const onDelete = async (id: string) => {
-    const { error } = await deleteTransaction(id);
-    if (error) errToast(error);
-    else txDeletedToast();
-  };
 
   if (loading && transactions.length === 0) {
     return (
@@ -122,7 +113,7 @@ function DashboardInner() {
             ↑ Alacak {formatTry(sums.alacak)}
           </Badge>
           <Badge className="border border-white/25 bg-white/15 px-3 py-1.5 text-xs font-extrabold text-white backdrop-blur-sm">
-            ↓ Verecek {formatTry(sums.verecek)}
+            ↓ Borç {formatTry(sums.verecek)}
           </Badge>
         </div>
       </Card>
@@ -149,7 +140,7 @@ function DashboardInner() {
           </p>
         </Card>
         <Card className="border-l-4 border-l-[var(--sd-verecek)] p-4 transition-all duration-200 hover:-translate-y-px">
-          <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">Verecek</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">Borç</p>
           <p className="sd-num sd-heading mt-1 text-lg font-bold text-[var(--sd-verecek)]">
             {formatTry(sums.verecek)}
           </p>
@@ -171,25 +162,25 @@ function DashboardInner() {
             href="/islemler"
             className="text-sm font-bold text-[var(--sd-primary)] hover:underline"
           >
-            Tümü
+            Tümü →
           </Link>
         </div>
-        <div className="flex flex-col gap-2">
+        <Card className="overflow-hidden p-0 px-4">
           {recent.length === 0 ? (
-            <Card className="flex flex-col items-center gap-2 py-10 text-center">
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
               <span className="text-4xl">📭</span>
               <p className="font-semibold text-[var(--text-secondary)]">Henüz işlem yok</p>
               <p className="text-sm text-[var(--text-secondary)]">
                 Alttaki ses satırı veya işlemler sayfasından ekleyin.
               </p>
-            </Card>
+            </div>
           ) : (
-            recent.map((t: TransactionRow) => (
-              <TransactionCard key={t.id} transaction={t} onDelete={onDelete} onEdit={setEditTx} />
-            ))
+            recent.map((t: TransactionRow) => <RecentTransactionCard key={t.id} tx={t} contacts={contacts} />)
           )}
-        </div>
+        </Card>
       </section>
+
+      <UpcomingPlanPayments />
 
       <button
         type="button"
@@ -200,12 +191,6 @@ function DashboardInner() {
         <Mic className="h-7 w-7" strokeWidth={2.4} />
       </button>
 
-      <EditTransactionModal
-        open={editTx != null}
-        transaction={editTx}
-        onClose={() => setEditTx(null)}
-        contacts={contacts}
-      />
     </PageShell>
   );
 }

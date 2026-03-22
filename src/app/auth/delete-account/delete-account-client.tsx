@@ -19,10 +19,11 @@ export function DeleteAccountClient() {
       return;
     }
     const supabase = createClient();
-    void supabase.auth.getSession().then(({ data }) => {
+    void (async () => {
+      const { data } = await supabase.auth.getSession();
       if (!data.session) setStatus("error");
       else setStatus("confirm");
-    });
+    })();
   }, [searchParams]);
 
   async function deleteAccount() {

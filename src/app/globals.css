@@ -2944,3 +2944,46 @@ nav,
   -webkit-user-select: none;
   user-select: none;
 }
+
+/* Tutarlı tipografi yardımcıları */
+.page-title {
+  font-size: 22px;
+  font-weight: 800;
+}
+.section-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.body-text {
+  font-size: 14px;
+  font-weight: 400;
+}
+.caption {
+  font-size: 12px;
+  font-weight: 400;
+}
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.amount-lg {
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.amount-md {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.amount-sm {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
