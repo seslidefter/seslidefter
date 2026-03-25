@@ -34,7 +34,7 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        source: "/(dashboard|islemler|alacak-verecek|odemeler|rapor|profil)",
+        source: "/(dashboard|islemler|alacak-verecek|odemeler|profil)",
         headers: [{ key: "Cache-Control", value: "no-store" }],
       },
     ];

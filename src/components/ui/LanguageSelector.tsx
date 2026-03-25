@@ -52,20 +52,20 @@ export function LanguageSelectorCompact() {
   const { language, setLanguage } = useLanguage();
 
   return (
-    <div className="flex gap-1">
+    <div className="flex gap-1.5">
       {LANGUAGES.map((lang) => (
         <button
           key={lang.code}
           type="button"
           onClick={() => setLanguage(lang.code)}
           title={lang.nativeLabel}
-          className={`h-8 w-8 rounded-lg text-lg transition-all ${
+          className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm transition-all ${
             language === lang.code
-              ? "scale-110 bg-white/30 ring-2 ring-white/60"
+              ? "bg-white/30 ring-2 ring-white/50"
               : "opacity-60 hover:bg-white/20 hover:opacity-90"
           }`}
         >
-          {lang.flag}
+          <span className="text-lg leading-none">{lang.flag}</span>
         </button>
       ))}
     </div>

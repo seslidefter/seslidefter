@@ -539,11 +539,43 @@ function AddPlanModal({
     icon: "💳",
     color: "#1976D2",
   });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const total = clampAmountNum(parseAmount(form.total_amount));
+    const installAmt = clampAmountNum(parseAmount(form.installment_amount));
+    const count = Math.floor(Number(form.installment_count)) || 0;
+
+    if (total > 0 && count > 0 && installAmt === 0) {
+      const q = total / count;
+      setForm((f) => {
+        if (clampAmountNum(parseAmount(f.installment_amount)) > 0) return f;
+        return { ...f, installment_amount: q.toFixed(2) };
+      });
+      return;
+    }
+    if (installAmt > 0 && count > 0 && total === 0) {
+      setForm((f) => {
+        if (clampAmountNum(parseAmount(f.total_amount)) > 0) return f;
+        return { ...f, total_amount: (installAmt * count).toFixed(2) };
+      });
+      return;
+    }
+    if (total > 0 && installAmt > 0 && count === 0) {
+      const c = Math.max(1, Math.ceil(total / installAmt));
+      setForm((f) => {
+        if ((Math.floor(Number(f.installment_count)) || 0) > 0) return f;
+        return { ...f, installment_count: String(c) };
+      });
+    }
+  }, [form.total_amount, form.installment_amount, form.installment_count]);
 
   const icons = ["💳", "🏠", "🚗", "📱", "🏥", "📚", "🛋️", "❄️", "🖥️", "✈️"];
   const colors = ["#1976D2", "#2E7D32", "#D32F2F", "#F57C00", "#7B1FA2", "#00796B"];
 
   const handleSave = async () => {
+    if (saving) return;
+
     const supabase = createClient();
     const {
       data: { user },
@@ -571,94 +603,100 @@ function AddPlanModal({
       return;
     }
 
-    const { data: plan, error } = await supabase
-      .from("payment_plans")
-      .insert({
+    setSaving(true);
+    try {
+      const { data: plan, error } = await supabase
+        .from("payment_plans")
+        .insert({
+          user_id: user.id,
+          title,
+          description: planDescription,
+          total_amount: totalAmount,
+          installment_amount: installmentAmount,
+          installment_count: installmentCount,
+          start_date: startDate,
+          due_day: Math.min(31, Math.max(1, Number(form.due_day) || 15)),
+          icon: form.icon,
+          color: form.color,
+          paid_amount: 0,
+          paid_count: 0,
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error || !plan) {
+        toast.error("Hata: " + (error?.message ?? "Plan oluşturulamadı"));
+        return;
+      }
+
+      const planId = plan.id as string;
+      const startDateObj = new Date(startDate + "T12:00:00");
+      const dueDay = Math.min(31, Math.max(1, Number(form.due_day) || 15));
+      const rows: Record<string, unknown>[] = [];
+
+      for (let i = 1; i <= installmentCount; i++) {
+        const dueDate = new Date(startDateObj);
+        dueDate.setMonth(dueDate.getMonth() + (i - 1));
+        const lastDay = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0).getDate();
+        dueDate.setDate(Math.min(dueDay, lastDay));
+        const iso = dueDate.toISOString().split("T")[0];
+        rows.push({
+          plan_id: planId,
+          user_id: user.id,
+          installment_number: i,
+          amount: installmentAmount,
+          due_date: iso,
+          is_paid: false,
+        });
+      }
+
+      const { error: payErr } = await supabase.from("payment_plan_payments").insert(rows);
+      if (payErr) {
+        toast.error("Taksitler oluşturulamadı: " + payErr.message);
+        return;
+      }
+
+      const limit = await checkMonthlyTransactionLimit(supabase, user.id);
+      if (!limit.ok && limit.message) {
+        toast.error(limit.message);
+        return;
+      }
+
+      const { value: balance_after, error: balErr } = await calculateNextBalanceAfterTransaction(
+        supabase,
+        user.id,
+        totalAmount,
+        "verecek"
+      );
+      if (balErr) {
+        toast.error(balErr);
+        return;
+      }
+
+      const { error: txErr } = await supabase.from("transactions").insert({
         user_id: user.id,
-        title,
-        description: planDescription,
-        total_amount: totalAmount,
-        installment_amount: installmentAmount,
-        installment_count: installmentCount,
-        start_date: startDate,
-        due_day: Math.min(31, Math.max(1, Number(form.due_day) || 15)),
-        icon: form.icon,
-        color: form.color,
-        paid_amount: 0,
-        paid_count: 0,
-      })
-      .select()
-      .single();
-
-    if (error || !plan) {
-      toast.error("Hata: " + (error?.message ?? "Plan oluşturulamadı"));
-      return;
-    }
-
-    const planId = plan.id as string;
-    const startDateObj = new Date(startDate + "T12:00:00");
-    const dueDay = Math.min(31, Math.max(1, Number(form.due_day) || 15));
-    const rows: Record<string, unknown>[] = [];
-
-    for (let i = 1; i <= installmentCount; i++) {
-      const dueDate = new Date(startDateObj);
-      dueDate.setMonth(dueDate.getMonth() + (i - 1));
-      const lastDay = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0).getDate();
-      dueDate.setDate(Math.min(dueDay, lastDay));
-      const iso = dueDate.toISOString().split("T")[0];
-      rows.push({
-        plan_id: planId,
-        user_id: user.id,
-        installment_number: i,
-        amount: installmentAmount,
-        due_date: iso,
+        category: "verecek",
+        amount: totalAmount,
+        description: sanitizeInput(`${form.icon} ${title} - Ödeme planı`),
+        date: startDate,
+        category_tag: "odeme_plani",
+        balance_after,
         is_paid: false,
+        plan_id: planId,
+        contact_id: null,
       });
-    }
+      if (txErr) {
+        console.error(txErr);
+        toast.error("Plan oluştu; borç kaydı eklenemedi: " + txErr.message);
+      }
 
-    const { error: payErr } = await supabase.from("payment_plan_payments").insert(rows);
-    if (payErr) {
-      toast.error("Taksitler oluşturulamadı: " + payErr.message);
-      return;
+      toast.success("✅ Ödeme planı oluşturuldu!");
+      onSave();
+      onClose();
+    } finally {
+      setSaving(false);
     }
-
-    const limit = await checkMonthlyTransactionLimit(supabase, user.id);
-    if (!limit.ok && limit.message) {
-      toast.error(limit.message);
-      return;
-    }
-
-    const { value: balance_after, error: balErr } = await calculateNextBalanceAfterTransaction(
-      supabase,
-      user.id,
-      totalAmount,
-      "verecek"
-    );
-    if (balErr) {
-      toast.error(balErr);
-      return;
-    }
-
-    const { error: txErr } = await supabase.from("transactions").insert({
-      user_id: user.id,
-      category: "verecek",
-      amount: totalAmount,
-      description: sanitizeInput(`${form.icon} ${title} - Ödeme planı`),
-      date: startDate,
-      category_tag: "odeme_plani",
-      balance_after,
-      is_paid: false,
-      plan_id: planId,
-      contact_id: null,
-    });
-    if (txErr) {
-      console.error(txErr);
-      toast.error("Plan oluştu; borç kaydı eklenemedi: " + txErr.message);
-    }
-
-    toast.success("✅ Ödeme planı oluşturuldu!");
-    onSave();
-    onClose();
   };
 
   return (
@@ -709,14 +747,21 @@ function AddPlanModal({
             className="form-input rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2 text-[var(--text-primary)]"
           />
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-blue-50 p-3 dark:bg-blue-900/20">
+            <p className="mb-1 text-xs font-semibold text-blue-600 dark:text-blue-400">💡 Otomatik hesaplama</p>
+            <p className="text-xs text-blue-500 dark:text-blue-400">
+              İkisini girin, üçüncüsü otomatik hesaplanır: Toplam ÷ Taksit sayısı = Taksit tutarı
+            </p>
+          </div>
+
+          <div className="mb-1 grid grid-cols-3 gap-2">
             <AmountInput
               label="Toplam (₺)"
               value={form.total_amount}
               onChange={(raw) => setForm((f) => ({ ...f, total_amount: raw }))}
               placeholder="0"
               className="min-w-0"
-              inputClassName="!text-base"
+              inputClassName="!text-sm"
             />
             <AmountInput
               label="Taksit (₺)"
@@ -724,31 +769,30 @@ function AddPlanModal({
               onChange={(raw) => setForm((f) => ({ ...f, installment_amount: raw }))}
               placeholder="0"
               className="min-w-0"
-              inputClassName="!text-base"
+              inputClassName="!text-sm"
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs font-bold text-[var(--text-secondary)]">Taksit sayısı</label>
-              <input
-                type="number"
-                value={form.installment_count}
-                onChange={(e) => setForm((f) => ({ ...f, installment_count: e.target.value }))}
-                className="mt-1 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2 text-[var(--text-primary)]"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-[var(--text-secondary)]">Ödeme günü</label>
+              <label className="text-xs font-bold text-[var(--text-secondary)]">Sayı</label>
               <input
                 type="number"
                 min={1}
-                max={31}
-                value={form.due_day}
-                onChange={(e) => setForm((f) => ({ ...f, due_day: e.target.value }))}
-                className="mt-1 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2 text-[var(--text-primary)]"
+                value={form.installment_count}
+                onChange={(e) => setForm((f) => ({ ...f, installment_count: e.target.value }))}
+                className="mt-1 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-2 py-2 text-sm text-[var(--text-primary)]"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-[var(--text-secondary)]">Ödeme günü (ayın günü)</label>
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={form.due_day}
+              onChange={(e) => setForm((f) => ({ ...f, due_day: e.target.value }))}
+              className="mt-1 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2 text-[var(--text-primary)]"
+            />
           </div>
 
           <div>
@@ -782,8 +826,8 @@ function AddPlanModal({
           <Button type="button" variant="outline" fullWidth onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button type="button" fullWidth onClick={() => void handleSave()}>
-            {t("payments.createPlan")}
+          <Button type="button" fullWidth disabled={saving} onClick={() => void handleSave()}>
+            {saving ? "…" : t("payments.createPlan")}
           </Button>
         </div>
       </div>

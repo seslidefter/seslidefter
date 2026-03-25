@@ -9,6 +9,14 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useDashboardVoiceFabStore } from "@/store/dashboardVoiceFabStore";
 
+type NavItem =
+  | {
+      href: string;
+      label: string;
+      icon: string;
+    }
+  | null;
+
 export function MobileNav() {
   const { t } = useLanguage();
   const pathname = usePathname();
@@ -36,40 +44,12 @@ export function MobileNav() {
     void checkPayments();
   }, [pathname]);
 
-  const left = [
-    {
-      href: "/dashboard",
-      label: t("nav.dashboard"),
-      short: t("nav.dashboardShort"),
-      emoji: "🏠",
-    },
-    {
-      href: "/islemler",
-      label: t("nav.transactions"),
-      short: t("nav.transactionsShort"),
-      emoji: "📋",
-    },
-    {
-      href: "/odemeler",
-      label: t("nav.payments"),
-      short: t("nav.paymentsShort"),
-      emoji: "💳",
-    },
-  ];
-
-  const right = [
-    {
-      href: "/rapor",
-      label: t("nav.report"),
-      short: t("nav.reportShort"),
-      emoji: "📊",
-    },
-    {
-      href: "/profil",
-      label: t("nav.profile"),
-      short: t("nav.profileShort"),
-      emoji: "👤",
-    },
+  const navItems: NavItem[] = [
+    { href: "/dashboard", label: t("nav.dashboard"), icon: "🏠" },
+    { href: "/islemler", label: t("nav.transactions"), icon: "💸" },
+    null,
+    { href: "/odemeler", label: t("nav.payments"), icon: "💳" },
+    { href: "/profil", label: t("nav.profile"), icon: "👤" },
   ];
 
   const onFab = () => {
@@ -83,79 +63,58 @@ export function MobileNav() {
   return (
     <nav
       className={cn(
-        "mobile-nav fixed bottom-0 left-0 right-0 z-40 min-h-[calc(64px+env(safe-area-inset-bottom))] border-t pb-[env(safe-area-inset-bottom)] pt-2 shadow-[var(--shadow)] backdrop-blur-[10px] backdrop-saturate-150 md:hidden"
+        "mobile-nav fixed bottom-0 left-0 right-0 z-40 border-t pb-[env(safe-area-inset-bottom)] pt-2 shadow-[var(--shadow)] backdrop-blur-[10px] backdrop-saturate-150 md:hidden"
       )}
       style={{
         borderColor: "var(--border-color)",
         background: "color-mix(in srgb, var(--bg-card) 92%, transparent)",
       }}
     >
-      <div className="relative mx-auto flex max-w-lg items-end justify-between px-1">
-        <div className="flex flex-1 justify-around pb-1.5">
-          {left.map(({ href, label, short, emoji }) => {
-            const isActive =
-              href === "/dashboard"
-                ? pathname === "/dashboard"
-                : pathname === href || pathname.startsWith(`${href}/`);
+      <div className="mx-auto grid h-16 max-w-lg grid-cols-5 items-center px-1">
+        {navItems.map((item) => {
+          if (!item) {
             return (
-              <Link
-                key={href}
-                href={href}
-                prefetch
-                className={cn(
-                  "relative flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-bold transition-colors duration-200",
-                  isActive ? "text-[var(--sd-primary)]" : "text-[var(--text-secondary)]"
-                )}
-              >
-                {href === "/odemeler" && hasUrgentPayment ? (
-                  <span
-                    className="absolute right-1 top-0 h-2.5 w-2.5 rounded-full border-2 border-[var(--bg-card)] bg-red-500 dark:border-[var(--sd-bg)]"
-                    aria-hidden
-                  />
-                ) : null}
-                <span className="text-lg leading-none" aria-hidden>
-                  {emoji}
-                </span>
-                <span className="max-w-[4.25rem] truncate text-center leading-tight">{short}</span>
-                <span className="sr-only">{label}</span>
-              </Link>
+              <div key="fab" className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={onFab}
+                  className="sd-fab-pulse sd-gradient relative -top-3 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-transform duration-200 active:scale-95"
+                  aria-label={t("dashboard.voiceFab")}
+                >
+                  <Mic className="h-7 w-7" strokeWidth={2.4} />
+                </button>
+              </div>
             );
-          })}
-        </div>
+          }
 
-        <div className="relative -top-6 z-[72] flex shrink-0 px-1">
-          <button
-            type="button"
-            onClick={onFab}
-            className="sd-fab-pulse sd-gradient flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-transform duration-200 active:scale-95"
-            aria-label={t("dashboard.voiceFab")}
-          >
-            <Mic className="h-7 w-7" strokeWidth={2.4} />
-          </button>
-        </div>
+          const active =
+            item.href === "/dashboard"
+              ? pathname === "/dashboard"
+              : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-        <div className="flex flex-1 justify-around pb-1.5">
-          {right.map(({ href, label, short, emoji }) => {
-            const active = pathname === href || pathname.startsWith(`${href}/`);
-            return (
-              <Link
-                key={href}
-                href={href}
-                prefetch
-                className={cn(
-                  "flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-bold transition-colors duration-200",
-                  active ? "text-[var(--sd-primary)]" : "text-[var(--text-secondary)]"
-                )}
-              >
-                <span className="text-lg leading-none" aria-hidden>
-                  {emoji}
-                </span>
-                <span className="max-w-[4.25rem] truncate text-center leading-tight">{short}</span>
-                <span className="sr-only">{label}</span>
-              </Link>
-            );
-          })}
-        </div>
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              prefetch
+              className={cn(
+                "relative flex flex-col items-center justify-center gap-1 py-2 text-[10px] font-semibold transition-colors",
+                active ? "text-green-600 dark:text-green-400" : "text-gray-400 dark:text-gray-500"
+              )}
+            >
+              {item.href === "/odemeler" && hasUrgentPayment ? (
+                <span
+                  className="absolute right-2 top-1 h-2.5 w-2.5 rounded-full border-2 border-[var(--bg-card)] bg-red-500 dark:border-[var(--sd-bg)]"
+                  aria-hidden
+                />
+              ) : null}
+              <span className="text-xl leading-none" aria-hidden>
+                {item.icon}
+              </span>
+              <span className="max-w-[4.5rem] truncate text-center leading-tight">{item.label}</span>
+            </Link>
+          );
+        })}
       </div>
     </nav>
   );

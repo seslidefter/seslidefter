@@ -1,27 +1,33 @@
 "use client";
 
-import { Plus, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MiniCalendar } from "@/components/transactions/MiniCalendar";
+import toast from "react-hot-toast";
 import { PageShell } from "@/components/layout/PageShell";
 import { EditTransactionModal } from "@/components/transactions/EditTransactionModal";
-import { TransactionCard } from "@/components/transactions/TransactionCard";
+import { MiniCalendar } from "@/components/transactions/MiniCalendar";
 import { TransactionModal } from "@/components/transactions/TransactionModal";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { Skeleton } from "@/components/ui/Skeleton";
-import { errToast, txDeletedToast } from "@/lib/sd-toast";
-import { groupTransactionsByLabel } from "@/lib/date-groups";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
+import { errToast } from "@/lib/sd-toast";
 import type { TransactionCategory, TransactionRow } from "@/types/database";
 import { useAuthStore } from "@/store/authStore";
 import { useTransactionStore } from "@/store/transactionStore";
 
-type Filter = "all" | TransactionCategory;
+type FilterKey = "all" | TransactionCategory;
+
+const categoryConfig: Record<
+  string,
+  { label: string; color: string; bg: string; sign: string }
+> = {
+  gelir: { label: "Gelir", color: "#2E7D32", bg: "#E8F5E9", sign: "+" },
+  gider: { label: "Gider", color: "#D32F2F", bg: "#FFEBEE", sign: "-" },
+  alacak: { label: "Alacak", color: "#1565C0", bg: "#E3F2FD", sign: "+" },
+  verecek: { label: "Borç", color: "#E65100", bg: "#FFF3E0", sign: "-" },
+};
 
 export function IslemlerView() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const dateLocale = language === "en" ? "en-US" : "tr-TR";
   const initialized = useAuthStore((s) => s.initialized);
   const transactions = useTransactionStore((s) => s.transactions);
   const contacts = useTransactionStore((s) => s.contacts);
@@ -29,243 +35,380 @@ export function IslemlerView() {
   const fetchAll = useTransactionStore((s) => s.fetchAll);
   const deleteTransaction = useTransactionStore((s) => s.deleteTransaction);
 
+  const [filter, setFilter] = useState<FilterKey>("all");
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [filterDate, setFilterDate] = useState<string | null>(null);
-  const [modal, setModal] = useState(false);
-  const [editTx, setEditTx] = useState<TransactionRow | null>(null);
-  const [currentMonth, setCurrentMonth] = useState(() => new Date());
-
-  const calendarTransactions = useMemo(
-    () =>
-      transactions.map((t) => ({
-        date: t.date,
-        category: t.category,
-        amount: Number(t.amount),
-      })),
-    [transactions]
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [currentMonth, setCurrentMonth] = useState<Date | null>(null);
+  const [calendarBounds, setCalendarBounds] = useState<{ today: string; yesterday: string } | null>(
+    null
   );
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editTx, setEditTx] = useState<TransactionRow | null>(null);
 
-  const load = useCallback(() => {
+  useEffect(() => {
+    const now = new Date();
+    setCurrentMonth(now);
+    const today = now.toISOString().split("T")[0]!;
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0]!;
+    setCalendarBounds({ today, yesterday });
+  }, []);
+
+  const loadData = useCallback(() => {
     void fetchAll().then((r) => {
       if (r.error) errToast(r.error);
     });
   }, [fetchAll]);
 
+  const filterChips = useMemo(
+    () =>
+      [
+        { key: "all" as const, label: t("common.all"), activeClass: "bg-gray-800 text-white dark:bg-white dark:text-gray-800" },
+        { key: "gelir" as const, label: t("transactions.income"), activeClass: "bg-green-600 text-white" },
+        { key: "gider" as const, label: t("transactions.expense"), activeClass: "bg-red-500 text-white" },
+        { key: "alacak" as const, label: t("transactions.credit"), activeClass: "bg-blue-600 text-white" },
+        { key: "verecek" as const, label: t("transactions.debt"), activeClass: "bg-orange-500 text-white" },
+      ] as const,
+    [t]
+  );
+
   useEffect(() => {
-    load();
-  }, [load]);
+    loadData();
+  }, [loadData]);
 
-  const filtered = useMemo(() => {
-    return transactions.filter((t) => {
-      if (filter !== "all" && t.category !== filter) return false;
-      if (filterDate && t.date !== filterDate) return false;
-      const q = search.trim().toLowerCase();
-      if (!q) return true;
-      const name = (t.contacts?.name ?? "").toLowerCase();
-      const desc = (t.description ?? "").toLowerCase();
-      const tr = (t.transcript ?? "").toLowerCase();
-      const tag = (t.category_tag ?? "").toLowerCase();
-      return name.includes(q) || desc.includes(q) || tr.includes(q) || tag.includes(q);
-    });
-  }, [transactions, filter, filterDate, search]);
+  const calendarTx = useMemo(
+    () =>
+      transactions.map((tx) => ({
+        date: tx.date,
+        category: tx.category,
+        amount: Number(tx.amount),
+      })),
+    [transactions]
+  );
 
-  const groups = useMemo(() => groupTransactionsByLabel(filtered), [filtered]);
-
-  const onDelete = async (id: string) => {
+  const handleDelete = async (id: string) => {
+    if (!confirm("Bu işlemi silmek istediğinizden emin misiniz?")) return;
     const { error } = await deleteTransaction(id);
-    if (error) errToast(error);
-    else txDeletedToast();
+    if (error) {
+      toast.error("Silinemedi: " + error);
+      return;
+    }
+    toast.success("🗑️ Silindi");
   };
 
-  if (!initialized || (loading && transactions.length === 0)) {
+  const filtered = useMemo(() => {
+    return transactions.filter((tx) => {
+      if (filter !== "all" && tx.category !== filter) return false;
+      if (selectedDate && tx.date !== selectedDate) return false;
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        const contact = contacts.find((c) => c.id === tx.contact_id);
+        return (
+          (tx.description?.toLowerCase().includes(q) ?? false) ||
+          (contact?.name?.toLowerCase().includes(q) ?? false) ||
+          (tx.category_tag?.toLowerCase().includes(q) ?? false) ||
+          (tx.transcript?.toLowerCase().includes(q) ?? false)
+        );
+      }
+      return true;
+    });
+  }, [transactions, filter, selectedDate, search, contacts]);
+
+  const grouped = useMemo(() => {
+    const groups: Record<string, TransactionRow[]> = {};
+    for (const tx of filtered) {
+      const key = tx.date;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(tx);
+    }
+    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [filtered]);
+
+  const getDateLabel = useCallback(
+    (dateStr: string): string => {
+      if (calendarBounds) {
+        if (dateStr === calendarBounds.today) return t("dashboard.todayShort");
+        if (dateStr === calendarBounds.yesterday) return t("dashboard.yesterdayShort");
+      }
+      return new Date(dateStr + "T12:00:00").toLocaleDateString(dateLocale, {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+    },
+    [calendarBounds, dateLocale, t]
+  );
+
+  const showSkeleton = !initialized || (loading && transactions.length === 0);
+
+  if (!currentMonth) {
     return (
       <PageShell
         title={t("transactions.title")}
         variant="narrow"
-        contentClassName="flex flex-col gap-4"
+        contentClassName="pb-32"
         titleClassName="hidden md:block"
       >
-        <Skeleton className="h-12 w-full rounded-2xl" />
-        <Skeleton className="mt-3 h-10 w-full" />
-        {[1, 2, 3].map((i) => (
-          <Skeleton key={i} className="mt-3 h-20 w-full rounded-2xl" />
-        ))}
+        <div className="mx-auto w-full max-w-4xl space-y-2 px-4 py-5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              className="h-16 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800"
+            />
+          ))}
+        </div>
       </PageShell>
     );
   }
-
-  const chips: { id: Filter; label: string }[] = [
-    { id: "all", label: t("common.all") },
-    { id: "gelir", label: t("transactions.income") },
-    { id: "gider", label: t("transactions.expense") },
-    { id: "alacak", label: t("transactions.credit") },
-    { id: "verecek", label: t("transactions.debt") },
-  ];
 
   return (
     <PageShell
       title={t("transactions.title")}
       variant="narrow"
-      contentClassName="flex flex-col gap-4"
+      contentClassName="pb-32"
       titleClassName="hidden md:block"
     >
-      <MiniCalendar
-        transactions={calendarTransactions}
-        selectedDate={filterDate}
-        onSelect={setFilterDate}
-        currentMonth={currentMonth}
-        onMonthChange={(deltaMonths) => {
-          setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + deltaMonths, 1));
-        }}
-      />
-
-      <div className="relative mb-3">
-        <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-secondary)]" />
-        <input
-          type="search"
-          placeholder={t("common.search")}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="min-h-[52px] w-full rounded-full border-[1.5px] py-3 pl-11 pr-4 text-sm font-medium shadow-[var(--shadow)] transition-all duration-200 focus:border-[var(--sd-primary)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--sd-primary)_25%,transparent)]"
-          style={{
-            borderColor: "var(--border-color)",
-            background: "var(--bg-card)",
-            color: "var(--text-primary)",
+      <div className="mx-auto flex w-full max-w-4xl flex-col px-0 py-1">
+        <MiniCalendar
+          transactions={calendarTx}
+          selectedDate={selectedDate}
+          onSelect={setSelectedDate}
+          currentMonth={currentMonth}
+          onMonthChange={(deltaMonths) => {
+            setCurrentMonth((prev) => {
+              if (!prev) return new Date();
+              return new Date(prev.getFullYear(), prev.getMonth() + deltaMonths, 1);
+            });
           }}
         />
-      </div>
 
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {chips.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => setFilter(c.id)}
-            className={cn(
-              "shrink-0 rounded-full px-4 py-2.5 text-xs font-bold transition-all duration-200",
-              filter === c.id
-                ? c.id === "all"
-                  ? "bg-gray-800 text-white dark:bg-white dark:text-gray-800"
-                  : c.id === "gelir"
-                    ? "bg-green-600 text-white shadow-md"
-                    : c.id === "gider"
-                      ? "bg-red-500 text-white shadow-md"
-                      : c.id === "alacak"
-                        ? "bg-blue-600 text-white shadow-md"
-                        : "bg-orange-500 text-white shadow-md"
-                : "border border-[var(--border-color)] shadow-[var(--shadow)] hover:opacity-90"
-            )}
-            style={
-              filter === c.id
-                ? undefined
-                : {
-                    background: "var(--bg-card)",
-                    color: "var(--text-secondary)",
-                  }
-            }
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
-
-      {filterDate ? (
-        <div className="mb-3 flex items-center gap-2 rounded-xl bg-green-50 px-3 py-2 dark:bg-green-900/20">
-          <span className="text-xs font-semibold text-green-800 dark:text-green-300">
-            📅{" "}
-            {new Date(filterDate + "T12:00:00").toLocaleDateString("tr-TR", {
-              day: "numeric",
-              month: "long",
-            })}{" "}
-            {t("transactions.filterActive")}
-          </span>
-          <button
-            type="button"
-            onClick={() => setFilterDate(null)}
-            className="ml-auto text-xs font-bold text-green-700 dark:text-green-400"
-          >
-            {t("transactions.clearFilter")}
-          </button>
-        </div>
-      ) : null}
-
-      {filtered.length > 0 ? (
-        <div className="mb-4 flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {[
-            {
-              label: t("transactions.income"),
-              amount: filtered.filter((t) => t.category === "gelir").reduce((s, t) => s + Number(t.amount), 0),
-              color: "text-[var(--sd-gelir)]",
-            },
-            {
-              label: t("transactions.expense"),
-              amount: filtered.filter((t) => t.category === "gider").reduce((s, t) => s + Number(t.amount), 0),
-              color: "text-[var(--sd-gider)]",
-            },
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="shrink-0 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] px-4 py-2.5"
-              style={{ boxShadow: "var(--shadow)" }}
+        <div className="relative mb-3 mt-3">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">🔍</span>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="İşlem veya kişi ara..."
+            className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-8 text-sm text-gray-900 focus:border-green-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+          />
+          {search ? (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400"
+              aria-label="Temizle"
             >
-              <div className="text-xs text-[var(--text-secondary)]">{s.label}</div>
-              <div className={cn("sd-num text-sm font-bold", s.color)}>
-                {new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(s.amount)}
+              ✕
+            </button>
+          ) : null}
+        </div>
+
+        <div className="mb-4 flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {filterChips.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setFilter(f.key)}
+              className={`flex-shrink-0 rounded-full px-4 py-2 text-xs font-bold transition-all ${
+                filter === f.key
+                  ? f.activeClass
+                  : "border border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+          {selectedDate ? (
+            <button
+              type="button"
+              onClick={() => setSelectedDate(null)}
+              suppressHydrationWarning
+              className="flex-shrink-0 rounded-full border border-green-200 bg-green-100 px-3 py-2 text-xs font-bold text-green-700 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300"
+            >
+              📅{" "}
+              <span suppressHydrationWarning>
+                {new Date(selectedDate + "T12:00:00").toLocaleDateString(dateLocale, {
+                  day: "numeric",
+                  month: "short",
+                })}
+              </span>{" "}
+              ✕
+            </button>
+          ) : null}
+        </div>
+
+        {filtered.length > 0 ? (
+          <div className="mb-4 flex gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="min-w-[80px] flex-shrink-0 rounded-xl border border-gray-100 bg-white px-3 py-2 text-center dark:border-gray-700 dark:bg-gray-800">
+              <div className="text-xs text-gray-400">{t("transactions.income")}</div>
+              <div className="text-sm font-bold text-green-600">
+                ₺
+                {filtered
+                  .filter((x) => x.category === "gelir")
+                  .reduce((s, x) => s + Number(x.amount), 0)
+                  .toLocaleString("tr-TR")}
               </div>
             </div>
-          ))}
-          <div
-            className="shrink-0 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] px-4 py-2.5"
-            style={{ boxShadow: "var(--shadow)" }}
-          >
-            <div className="text-xs text-[var(--text-secondary)]">
-              {t("transactions.txnCount", { count: filtered.length })}
+            <div className="min-w-[80px] flex-shrink-0 rounded-xl border border-gray-100 bg-white px-3 py-2 text-center dark:border-gray-700 dark:bg-gray-800">
+              <div className="text-xs text-gray-400">{t("transactions.expense")}</div>
+              <div className="text-sm font-bold text-red-500">
+                ₺
+                {filtered
+                  .filter((x) => x.category === "gider")
+                  .reduce((s, x) => s + Number(x.amount), 0)
+                  .toLocaleString("tr-TR")}
+              </div>
             </div>
-            <div className="text-sm font-bold text-[var(--text-primary)]">{t("transactions.summary")}</div>
+            <div className="min-w-[80px] flex-shrink-0 rounded-xl border border-gray-100 bg-white px-3 py-2 text-center dark:border-gray-700 dark:bg-gray-800">
+              <div className="text-xs text-gray-400">{t("transactions.txnCount", { count: filtered.length })}</div>
+              <div className="text-sm font-bold text-gray-700 dark:text-gray-300">{t("transactions.summary")}</div>
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {groups.length === 0 ? (
-        <Card className="flex flex-col items-center gap-3 py-14 text-center transition-all duration-200 hover:-translate-y-px">
-          <span className="text-5xl">📝</span>
-          <p className="font-bold text-[var(--text-secondary)]">{t("transactions.noTransactions")}</p>
-          <p className="text-sm text-[var(--text-secondary)]">{t("transactions.emptyHint")}</p>
-        </Card>
-      ) : (
-        <div className="flex flex-col gap-6">
-          {groups.map(({ label, items }) => (
-            <section key={label}>
-              <h2 className="sd-heading mb-2 text-sm font-bold text-[var(--text-secondary)]">{label}</h2>
-              <div className="flex flex-col gap-2">
-                {items.map((t) => (
-                  <TransactionCard
-                    key={t.id}
-                    transaction={t}
-                    onDelete={onDelete}
-                    onEdit={setEditTx}
-                    showCreatedTime
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
+        {showSkeleton ? (
+          <div className="space-y-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
+            ))}
+          </div>
+        ) : grouped.length === 0 ? (
+          <div className="py-16 text-center">
+            <div className="mb-3 text-5xl">📝</div>
+            <p className="font-medium text-gray-500 dark:text-gray-400">{t("transactions.noTransactions")}</p>
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="mt-4 rounded-xl bg-green-700 px-6 py-3 text-sm font-bold text-white hover:bg-green-600"
+            >
+              + {t("transactions.addNew")}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {grouped.map(([date, txs]) => {
+              const dayIncome = txs.filter((x) => x.category === "gelir").reduce((s, x) => s + Number(x.amount), 0);
+              const dayExpense = txs.filter((x) => x.category === "gider").reduce((s, x) => s + Number(x.amount), 0);
 
-      <div className="h-24 shrink-0 md:h-0" aria-hidden />
+              return (
+                <div key={date}>
+                  <div className="mb-2 flex items-center gap-2">
+                    <span
+                      suppressHydrationWarning
+                      className="text-xs font-black uppercase tracking-wide text-gray-600 dark:text-gray-400"
+                    >
+                      {getDateLabel(date)}
+                    </span>
+                    <div className="h-px flex-1 bg-gray-100 dark:bg-gray-700" />
+                    <div className="flex gap-2 text-xs">
+                      {dayIncome > 0 ? (
+                        <span className="font-bold text-green-600">+₺{dayIncome.toLocaleString("tr-TR")}</span>
+                      ) : null}
+                      {dayExpense > 0 ? (
+                        <span className="font-bold text-red-500">-₺{dayExpense.toLocaleString("tr-TR")}</span>
+                      ) : null}
+                    </div>
+                  </div>
 
-      <Button
-        type="button"
-        onClick={() => setModal(true)}
-        className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-4 z-[60] !h-14 !w-14 !min-h-0 rounded-full !p-0 shadow-xl md:bottom-8 md:right-8"
-        aria-label={t("transactions.addNew")}
-      >
-        <Plus className="h-7 w-7" strokeWidth={2.5} />
-      </Button>
+                  <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                    {txs.map((tx, idx) => {
+                      const cfg = categoryConfig[tx.category] ?? categoryConfig.gider;
+                      const contact = contacts.find((c) => c.id === tx.contact_id);
+                      const time = new Date(tx.created_at).toLocaleTimeString(dateLocale, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      });
+                      const isLast = idx === txs.length - 1;
 
-      <TransactionModal open={modal} onClose={() => setModal(false)} contacts={contacts} />
+                      return (
+                        <div
+                          key={tx.id}
+                          className={cn(
+                            "group flex items-center gap-3 px-4 py-3.5 transition-all hover:bg-gray-50 dark:hover:bg-gray-700/40",
+                            !isLast && "border-b border-gray-100 dark:border-gray-700"
+                          )}
+                        >
+                          <div
+                            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold"
+                            style={{ background: cfg.bg, color: cfg.color }}
+                          >
+                            {cfg.sign === "+" ? "↑" : "↓"}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+                              {tx.description || contact?.name || cfg.label}
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                              {contact ? (
+                                <span className="max-w-[80px] truncate text-xs text-gray-400">{contact.name}</span>
+                              ) : null}
+                              {tx.category_tag ? (
+                                <span
+                                  className="rounded-full px-1.5 py-0.5 text-xs"
+                                  style={{ background: cfg.bg, color: cfg.color }}
+                                >
+                                  {tx.category_tag}
+                                </span>
+                              ) : null}
+                              <span suppressHydrationWarning className="text-xs text-gray-400">
+                                {time}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="mr-2 flex-shrink-0 text-right">
+                            <div className="text-sm font-bold" style={{ color: cfg.color }}>
+                              {cfg.sign}₺{Number(tx.amount).toLocaleString("tr-TR")}
+                            </div>
+                            {tx.balance_after != null ? (
+                              <div className="mt-0.5 text-xs text-gray-400">
+                                ₺{Number(tx.balance_after).toLocaleString("tr-TR")}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="flex flex-shrink-0 gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                            <button
+                              type="button"
+                              onClick={() => setEditTx(tx)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-xs text-blue-500 hover:bg-blue-100 dark:bg-blue-900/30"
+                              aria-label={t("common.edit")}
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDelete(tx.id)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-xs text-red-500 hover:bg-red-100 dark:bg-red-900/30"
+                              aria-label={t("common.delete")}
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setShowAddModal(true)}
+          className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-green-700 text-3xl text-white shadow-lg shadow-green-500/30 transition-all hover:bg-green-600 active:scale-95 md:bottom-8 md:right-8"
+          aria-label={t("transactions.addNew")}
+        >
+          +
+        </button>
+      </div>
+
+      <TransactionModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        contacts={contacts}
+      />
       <EditTransactionModal
         open={editTx != null}
         transaction={editTx}

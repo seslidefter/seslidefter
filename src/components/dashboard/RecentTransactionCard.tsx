@@ -47,7 +47,7 @@ export function RecentTransactionCard({
           <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${cfg.bg} ${cfg.color}`}>
             {cfg.label}
           </span>
-          <span className="text-xs text-[var(--text-secondary)]">
+          <span suppressHydrationWarning className="text-xs text-[var(--text-secondary)]">
             {date} · {time}
           </span>
         </div>

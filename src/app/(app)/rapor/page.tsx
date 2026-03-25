@@ -1,6 +1,12 @@
-import { RaporPageClient } from "./rapor-page-client";
+"use client";
 
-/** Sunucu segmenti: /rapor — istemci mantığı `RaporPageClient` içinde */
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
 export default function RaporPage() {
-  return <RaporPageClient />;
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/profil#rapor");
+  }, [router]);
+  return null;
 }

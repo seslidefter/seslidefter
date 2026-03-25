@@ -106,11 +106,6 @@ export function TransactionModal({ open, onClose, contacts, initialContactId }: 
       return;
     }
 
-    if (showContact && !contactId) {
-      toast.error("Alacak / borç için kişi seçin");
-      return;
-    }
-
     setSaving(true);
     const { value: balance_after, error: balErr } = await calculateNextBalanceAfterTransaction(
       supabase,
@@ -258,7 +253,10 @@ export function TransactionModal({ open, onClose, contacts, initialContactId }: 
 
           {showContact ? (
             <div>
-              <label className="mb-1.5 block text-sm font-bold text-[var(--text-primary)]">Kişi</label>
+              <label className="mb-1.5 block text-sm font-bold text-[var(--text-primary)]">
+                Kişi{" "}
+                <span className="font-normal text-[var(--text-secondary)]">(opsiyonel)</span>
+              </label>
               <select
                 value={contactId}
                 onChange={(e) => setContactId(e.target.value)}

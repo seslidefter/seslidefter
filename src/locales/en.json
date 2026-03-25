@@ -75,11 +75,14 @@
   },
   "dashboard": {
     "greeting": "Hello, {name} 👋",
+    "greetingShort": "Hello 👋",
+    "yesterdayShort": "Yesterday",
     "cashBalance": "Cash Balance",
     "income": "Income",
     "expense": "Expense",
     "credit": "Credit",
     "debt": "Debt",
+    "payment": "Payment",
     "recentTransactions": "Recent Transactions",
     "viewAll": "View All →",
     "noTransactions": "No transactions yet",
@@ -134,8 +137,16 @@
     "unknownPerson": "Unknown",
     "rowCreditShort": "📥 Credit",
     "rowDebtShort": "📤 Debt",
-    "addCreditTitle": "Add credit",
-    "addDebtTitle": "Add debt"
+    "addCreditTitle": "Add Credit",
+    "addDebtTitle": "Add Debt",
+    "dueStatusSafe": "{days} days left",
+    "dueStatusWarning": "⚠️ {days} days left",
+    "dueStatusUrgent": "🔥 {days} days left",
+    "dueStatusOverdue": "⛔ {days} days overdue!",
+    "dueLabel": "Due:",
+    "dueDuration": "{days}-day term",
+    "dueOverdueBanner": "Due date was {days} days ago!",
+    "dueUrgentSummary": "{count} items due within 7 days"
   },
   "payments": {
     "title": "Payment Plans",

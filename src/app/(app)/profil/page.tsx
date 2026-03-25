@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { PageShell } from "@/components/layout/PageShell";
 import { persistTheme, readStoredTheme } from "@/components/providers/theme-provider";
+import { RaporTab } from "@/components/profil/RaporTab";
 import { LanguageSelector } from "@/components/ui/LanguageSelector";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { errToast } from "@/lib/sd-toast";
@@ -13,7 +14,7 @@ import { getBrowserClientSingleton } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/authStore";
 
-type TabType = "hesap" | "plan" | "davet" | "ayarlar";
+type TabType = "hesap" | "davet" | "rapor" | "ayarlar";
 
 export type ProfilProfile = Record<string, unknown> & {
   id: string;
@@ -81,7 +82,7 @@ export default function ProfilPage() {
 
   useEffect(() => {
     const h = window.location.hash.replace(/^#/, "") as TabType;
-    if (h === "plan" || h === "davet" || h === "ayarlar" || h === "hesap") setOpenSection(h);
+    if (h === "davet" || h === "ayarlar" || h === "hesap" || h === "rapor") setOpenSection(h);
   }, []);
 
   useEffect(() => {
@@ -160,8 +161,8 @@ export default function ProfilPage() {
   const sections: { id: TabType; label: string; icon: string }[] = useMemo(
     () => [
       { id: "hesap", label: t("profile.accountInfo"), icon: "👤" },
-      { id: "plan", label: t("profile.planMembership"), icon: "⭐" },
       { id: "davet", label: t("profile.inviteEarn"), icon: "🎁" },
+      { id: "rapor", label: t("report.title"), icon: "📊" },
       { id: "ayarlar", label: t("profile.settings"), icon: "⚙️" },
     ],
     [t]
@@ -234,9 +235,9 @@ export default function ProfilPage() {
                       <HesapTab profile={profile} isPremium={isPremium} />
                     </div>
                   )}
-                  {section.id === "plan" && (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <PlanTab profile={profile} isPremium={isPremium} />
+                  {section.id === "rapor" && (
+                    <div className="md:col-span-2">
+                      <RaporTab />
                     </div>
                   )}
                   {section.id === "davet" && (
@@ -322,7 +323,12 @@ const HesapTab = memo(function HesapTab({
             </div>
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5 last:border-0 dark:border-gray-700">
               <span className="text-sm text-gray-500 dark:text-gray-400">Üyelik Tarihi</span>
-              <span className="text-sm font-semibold text-gray-900 dark:text-white">{joinDate}</span>
+              <span
+                suppressHydrationWarning
+                className="text-sm font-semibold text-gray-900 dark:text-white"
+              >
+                {joinDate}
+              </span>
             </div>
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5 last:border-0 dark:border-gray-700">
               <span className="text-sm text-gray-500 dark:text-gray-400">Plan</span>
@@ -340,7 +346,10 @@ const HesapTab = memo(function HesapTab({
             {isPremium && premiumUntil ? (
               <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3.5">
                 <span className="text-sm text-gray-500 dark:text-gray-400">Premium Bitiş</span>
-                <span className="text-right text-sm font-semibold text-gray-900 dark:text-white">
+                <span
+                  suppressHydrationWarning
+                  className="text-right text-sm font-semibold text-gray-900 dark:text-white"
+                >
                   {premiumUntil}
                   {daysRemaining !== null ? (
                     <span className="ml-1.5 inline-block rounded-lg bg-green-50 px-1.5 py-0.5 text-[10px] font-bold text-green-700 dark:bg-green-900/30 dark:text-green-400">
@@ -352,147 +361,6 @@ const HesapTab = memo(function HesapTab({
             ) : null}
           </div>
         </div>
-    </div>
-  );
-});
-
-const PlanTab = memo(function PlanTab({ isPremium }: { profile?: ProfilProfile; isPremium: boolean }) {
-  const freeFeatures = [
-    { ok: true, text: "Aylık 50 işlem kaydı" },
-    { ok: true, text: "10 kişi takibi" },
-    { ok: true, text: "3 ödeme planı" },
-    { ok: true, text: "Temel raporlar" },
-    { ok: true, text: "Sesli kayıt (günlük 5)" },
-    { ok: false, text: "Sınırsız işlem" },
-    { ok: false, text: "AI Finansal Asistan" },
-    { ok: false, text: "Excel / PDF export" },
-    { ok: false, text: "Fiş & fatura tarama" },
-    { ok: false, text: "WhatsApp hatırlatma" },
-    { ok: false, text: "Tekrarlayan işlemler" },
-    { ok: false, text: "Akıllı tahminler" },
-  ];
-
-  const premiumFeatures = [
-    { icon: "♾️", text: "Sınırsız işlem kaydı" },
-    { icon: "👥", text: "Sınırsız kişi takibi" },
-    { icon: "💳", text: "Sınırsız ödeme planı" },
-    { icon: "🤖", text: "AI Finansal Asistan" },
-    { icon: "🧠", text: "Akıllı harcama tahminleri" },
-    { icon: "📊", text: "Gelişmiş raporlar" },
-    { icon: "📥", text: "Excel & PDF export" },
-    { icon: "📷", text: "Fiş & fatura tarama (OCR)" },
-    { icon: "📱", text: "WhatsApp borç hatırlatma" },
-    { icon: "🔄", text: "Tekrarlayan işlemler" },
-    { icon: "🎙️", text: "Sınırsız sesli kayıt" },
-    { icon: "🔊", text: "Sesli finansal asistan" },
-    { icon: "📅", text: "Ödeme bildirimleri" },
-    { icon: "🔒", text: "Öncelikli destek" },
-  ];
-
-  if (isPremium) {
-    return (
-      <div className="flex flex-col gap-3.5 md:col-span-2">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-900 via-green-700 to-green-600 p-5 text-white">
-          <div className="mb-4 flex items-center gap-3">
-            <span className="text-4xl">⭐</span>
-            <div>
-              <div className="text-xl font-black">Premium Üye</div>
-              <div className="mt-0.5 text-sm opacity-80">Tüm özellikler aktif</div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-2">
-            {premiumFeatures.map((f, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-1.5 rounded-lg bg-white/15 px-2 py-1.5 text-xs"
-              >
-                <span>{f.icon}</span>
-                <span>{f.text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-4 md:col-span-2">
-      <div className="mb-1 overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
-        <div className="border-b border-gray-100 bg-gray-50 px-4 py-3 text-sm font-bold dark:border-gray-700 dark:bg-gray-700/50">
-          🆓 Mevcut Plan: Ücretsiz
-        </div>
-        <div className="grid grid-cols-2 gap-2 p-4">
-          {freeFeatures.map((f, i) => (
-            <div
-              key={i}
-              className={cn(
-                "flex items-center gap-2 text-xs",
-                !f.ok ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
-              )}
-            >
-              <span>{f.ok ? "✅" : "❌"}</span>
-              <span>{f.text}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-900 via-green-700 to-green-600 p-5 text-white">
-        <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10" />
-        <div className="absolute -bottom-6 -left-6 h-24 w-24 rounded-full bg-white/[0.08]" />
-
-        <div className="relative">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <div className="text-xl font-black">⭐ Premium&apos;a Geç</div>
-              <div className="mt-1 text-sm opacity-80">Tüm özelliklerin kilidini aç</div>
-            </div>
-            <div className="shrink-0 text-right">
-              <div className="text-3xl font-black">
-                ₺99<span className="text-base font-normal opacity-75">/ay</span>
-              </div>
-              <div className="mt-1 flex items-center justify-end gap-1 text-xs opacity-70">
-                <span className="rounded-lg bg-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                  %33
-                </span>
-                ₺799/yıl
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-5 grid grid-cols-2 gap-2">
-            {premiumFeatures.map((f, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-1.5 rounded-lg bg-white/15 px-2 py-1.5 text-xs"
-              >
-                <span>{f.icon}</span>
-                <span>{f.text}</span>
-              </div>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            className="mb-2 w-full rounded-xl bg-white py-4 text-base font-black text-green-800 shadow-lg"
-            onClick={() => toast("Ödeme entegrasyonu yakında — bizi takip edin.", { icon: "⭐" })}
-          >
-            ₺799/yıl ile Başla — En İyi Değer 🏆
-          </button>
-          <button
-            type="button"
-            className="mb-3 w-full rounded-xl border border-white/30 bg-white/15 py-3 text-sm font-bold text-white"
-            onClick={() => toast("Ödeme entegrasyonu yakında — bizi takip edin.", { icon: "⭐" })}
-          >
-            ₺99/ay ile Başla
-          </button>
-          <p className="mb-2 text-center text-xs opacity-60">🔒 İstediğin zaman iptal et • Güvenli ödeme</p>
-          <div className="rounded-xl bg-white/10 p-3 text-xs leading-relaxed">
-            💡 <strong>Ücretsiz dene:</strong> Davet kodunu paylaş, her davet için 30 gün kazan!
-          </div>
-        </div>
-      </div>
     </div>
   );
 });

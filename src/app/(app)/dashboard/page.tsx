@@ -3,7 +3,7 @@
 import { Mic } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { UsageIndicator } from "@/components/plan/UsageIndicator";
 import { DashboardVoiceCard } from "@/components/dashboard/DashboardVoiceCard";
 import { RecentTransactionCard } from "@/components/dashboard/RecentTransactionCard";
@@ -41,6 +41,7 @@ function VoiceQuerySync() {
 
 function DashboardInner() {
   const { t } = useLanguage();
+  const [mounted, setMounted] = useState(false);
   const user = useAuthStore((s) => s.user);
   const transactions = useTransactionStore((s) => s.transactions);
   const contacts = useTransactionStore((s) => s.contacts);
@@ -51,6 +52,10 @@ function DashboardInner() {
       if (r.error) errToast(r.error);
     });
   }, [fetchAll]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     loadTx();
@@ -78,11 +83,31 @@ function DashboardInner() {
 
   const recent = useMemo(() => transactions.slice(0, 5), [transactions]);
 
-  const firstName = useMemo(() => {
+  const [greetingName, setGreetingName] = useState("");
+  useEffect(() => {
     const meta = (user?.user_metadata?.full_name as string | undefined)?.trim();
-    if (meta) return meta.split(/\s+/)[0] ?? meta;
-    return user?.email?.split("@")[0]?.trim() ?? "";
+    const first = meta ? (meta.split(/\s+/)[0] ?? meta) : (user?.email?.split("@")[0]?.trim() ?? "");
+    setGreetingName(first);
   }, [user]);
+
+  if (!mounted) {
+    return (
+      <PageShell variant="wide" contentClassName="flex flex-col gap-4 pb-28">
+        <div className="animate-pulse space-y-4">
+          <div className="h-36 rounded-2xl bg-green-100 dark:bg-green-900/20" />
+          <div className="grid grid-cols-2 gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-20 rounded-2xl bg-[var(--bg-secondary)] dark:bg-gray-800" />
+            ))}
+          </div>
+          <div className="h-6 w-32 rounded-lg bg-[var(--bg-secondary)] dark:bg-gray-800" />
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="mb-2 h-16 rounded-xl bg-[var(--bg-secondary)] dark:bg-gray-800" />
+          ))}
+        </div>
+      </PageShell>
+    );
+  }
 
   if (loading && transactions.length === 0) {
     return (
@@ -107,8 +132,11 @@ function DashboardInner() {
     <PageShell variant="wide" contentClassName="relative flex flex-col gap-4 pb-28">
       <VoiceQuerySync />
 
-      <h1 className="text-xl font-bold text-[var(--text-primary)] md:text-2xl">
-        {t("dashboard.greeting", { name: firstName })}
+      <h1
+        suppressHydrationWarning
+        className="text-xl font-bold text-[var(--text-primary)] md:text-2xl"
+      >
+        {greetingName ? t("dashboard.greeting", { name: greetingName }) : t("dashboard.greetingShort")}
       </h1>
 
       <Card className="sd-gradient relative min-h-[160px] overflow-hidden border-0 p-7 text-white shadow-lg transition-all duration-200 hover:-translate-y-px">
@@ -133,7 +161,7 @@ function DashboardInner() {
             ↑ Alacak {formatTry(sums.alacak)}
           </Badge>
           <Badge className="border border-white/25 bg-white/15 px-3 py-1.5 text-xs font-extrabold text-white backdrop-blur-sm">
-            ↓ Borç {formatTry(sums.verecek)}
+            ↓ {t("dashboard.payment")} {formatTry(sums.verecek)}
           </Badge>
         </div>
       </Card>
@@ -165,7 +193,7 @@ function DashboardInner() {
         </Card>
         <Card className="border-l-4 border-l-[var(--sd-verecek)] p-4 transition-all duration-200 hover:-translate-y-px">
           <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
-            {t("dashboard.debt")}
+            {t("dashboard.payment")}
           </p>
           <p className="sd-num sd-heading mt-1 text-lg font-bold text-[var(--sd-verecek)]">
             {formatTry(sums.verecek)}

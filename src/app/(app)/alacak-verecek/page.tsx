@@ -45,6 +45,86 @@ function toInputDate(d: string | null | undefined): string {
   return String(d).slice(0, 10);
 }
 
+type DueDateStatus = "safe" | "warning" | "urgent" | "overdue";
+
+type DueDateInfo = {
+  remainingDays: number;
+  progressPercent: number;
+  status: DueDateStatus;
+  totalDays: number;
+};
+
+function getDueDateInfo(
+  dueDate: string | null,
+  createdAt: string,
+  isPaid: boolean
+): DueDateInfo | null {
+  if (!dueDate || isPaid) return null;
+
+  const dueStr = String(dueDate).slice(0, 10);
+  const now = new Date();
+  const due = new Date(`${dueStr}T23:59:59`);
+  const created = new Date(createdAt);
+  if (Number.isNaN(due.getTime()) || Number.isNaN(created.getTime())) return null;
+
+  const totalDays = Math.ceil((due.getTime() - created.getTime()) / 86400000);
+  const remainingDays = Math.ceil((due.getTime() - now.getTime()) / 86400000);
+  const elapsedDays = totalDays - remainingDays;
+
+  const rawProgress =
+    totalDays > 0
+      ? Math.min(Math.max((elapsedDays / totalDays) * 100, 0), 100)
+      : 100;
+
+  let status: DueDateStatus;
+  if (remainingDays < 0) status = "overdue";
+  else if (remainingDays <= 3) status = "urgent";
+  else if (remainingDays <= 7) status = "warning";
+  else status = "safe";
+
+  const progressPercent = status === "overdue" ? 100 : rawProgress;
+
+  return { remainingDays, progressPercent, status, totalDays };
+}
+
+const DUE_STATUS_BAR: Record<DueDateStatus, string> = {
+  safe: "from-green-400 to-green-500",
+  warning: "from-yellow-400 to-orange-400",
+  urgent: "from-orange-500 to-red-500",
+  overdue: "from-red-600 to-red-700",
+};
+
+const DUE_STATUS_TEXT: Record<DueDateStatus, string> = {
+  safe: "text-green-600 dark:text-green-400",
+  warning: "text-orange-600 dark:text-orange-400",
+  urgent: "text-red-600 dark:text-red-400",
+  overdue: "text-red-600 dark:text-red-400",
+};
+
+const DUE_STATUS_BG: Record<DueDateStatus, string> = {
+  safe: "bg-green-50 dark:bg-green-900/20",
+  warning: "bg-orange-50 dark:bg-orange-900/20",
+  urgent: "bg-red-50 dark:bg-red-900/20",
+  overdue: "bg-red-50 dark:bg-red-900/20",
+};
+
+function dueStatusLabel(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  status: DueDateStatus,
+  remainingDays: number
+): string {
+  if (status === "overdue") {
+    return t("debtCredit.dueStatusOverdue", { days: Math.abs(remainingDays) });
+  }
+  if (status === "urgent") {
+    return t("debtCredit.dueStatusUrgent", { days: remainingDays });
+  }
+  if (status === "warning") {
+    return t("debtCredit.dueStatusWarning", { days: remainingDays });
+  }
+  return t("debtCredit.dueStatusSafe", { days: remainingDays });
+}
+
 function DebtCreditRow({
   tx,
   contacts,
@@ -60,90 +140,161 @@ function DebtCreditRow({
   onMarkPaid: (id: string) => void;
   isLast?: boolean;
 }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const localeTag = language === "en" ? "en-US" : "tr-TR";
   const contact = contacts.find((c) => c.id === tx.contact_id);
   const isAlacak = tx.category === "alacak";
+  const dueDateInfo = getDueDateInfo(tx.due_date, tx.created_at, tx.is_paid);
+  const dueStr = tx.due_date ? String(tx.due_date).slice(0, 10) : "";
 
   return (
-    <div
-      className={cn(
-        "group flex items-center gap-3 py-3 pl-4 pr-2 transition-all hover:bg-gray-50 dark:hover:bg-gray-700/30",
-        !isLast && "border-b border-gray-100 dark:border-gray-700"
-      )}
-    >
-      <div
-        className={`h-10 w-1 shrink-0 rounded-full ${isAlacak ? "bg-blue-500" : "bg-orange-500"}`}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-gray-900 dark:text-white">
-          {contact?.name || t("debtCredit.unknownPerson")}
+    <div className={cn(!isLast && "border-b border-gray-100 dark:border-gray-700")}>
+      <div className="group flex items-center gap-3 px-4 py-3.5 transition-all hover:bg-gray-50 dark:hover:bg-gray-700/30">
+        <div
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-black",
+            isAlacak
+              ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+              : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+          )}
+        >
+          {(contact?.name?.trim()?.[0] ?? "?").toUpperCase()}
         </div>
-        <div className="mt-0.5 truncate text-xs text-gray-500">
-          {tx.description || (isAlacak ? t("transactions.credit") : t("transactions.debt"))}
-        </div>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-              isAlacak
-                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-            }`}
-          >
-            {isAlacak ? t("debtCredit.rowCreditShort") : t("debtCredit.rowDebtShort")}
-          </span>
-          <span className="text-xs text-gray-400">
-            {new Date(tx.date + "T12:00:00").toLocaleDateString("tr-TR", {
-              day: "numeric",
-              month: "short",
-            })}
-          </span>
-          {tx.due_date && !tx.is_paid ? (
-            <span className="text-xs text-amber-600 dark:text-amber-400">
-              📅{" "}
-              {new Date(String(tx.due_date).slice(0, 10) + "T12:00:00").toLocaleDateString("tr-TR", {
+
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+            {contact?.name || t("debtCredit.unknownPerson")}
+          </div>
+          <div className="mt-0.5 truncate text-xs text-gray-500">
+            {tx.description || (isAlacak ? t("transactions.credit") : t("transactions.debt"))}
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-2">
+            <span
+              className={cn(
+                "rounded-full px-1.5 py-0.5 text-xs font-semibold",
+                isAlacak
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                  : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+              )}
+            >
+              {isAlacak ? t("debtCredit.rowCreditShort") : t("debtCredit.rowDebtShort")}
+            </span>
+            <span className="text-xs text-gray-400">
+              {new Date(tx.date + "T12:00:00").toLocaleDateString(localeTag, {
                 day: "numeric",
                 month: "short",
               })}
             </span>
-          ) : null}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="text-right">
+            <div className={cn("text-base font-bold", isAlacak ? "text-blue-600" : "text-orange-600")}>
+              ₺{Number(tx.amount).toLocaleString(localeTag, { minimumFractionDigits: 2 })}
+            </div>
+            <div className={cn("mt-0.5 text-xs", tx.is_paid ? "text-green-600" : "text-gray-400")}>
+              {tx.is_paid ? `✅ ${t("debtCredit.paid")}` : `⏳ ${t("debtCredit.pending")}`}
+            </div>
+          </div>
+
+          <div className="flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+            {!tx.is_paid ? (
+              <button
+                type="button"
+                onClick={() => onMarkPaid(tx.id)}
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 text-xs text-green-600 dark:bg-green-900/30"
+                title={t("debtCredit.markPaid")}
+              >
+                ✓
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onEdit(tx)}
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-xs text-blue-500 dark:bg-blue-900/30"
+              title={t("common.edit")}
+            >
+              ✏️
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete(tx.id)}
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-xs text-red-500 dark:bg-red-900/30"
+              title={t("common.delete")}
+            >
+              🗑️
+            </button>
+          </div>
         </div>
       </div>
-      <div className="shrink-0 text-right">
-        <div className={`text-base font-bold ${isAlacak ? "text-blue-600" : "text-orange-600"}`}>
-          ₺{Number(tx.amount).toLocaleString("tr-TR", { minimumFractionDigits: 2 })}
+
+      {dueDateInfo && !tx.is_paid ? (
+        <div className={cn("px-4 pb-3", DUE_STATUS_BG[dueDateInfo.status])}>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {t("debtCredit.dueLabel")}{" "}
+              {new Date(`${dueStr}T12:00:00`).toLocaleDateString(localeTag, {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+            </span>
+            <span className={cn("text-xs font-black", DUE_STATUS_TEXT[dueDateInfo.status])}>
+              {dueStatusLabel(t, dueDateInfo.status, dueDateInfo.remainingDays)}
+            </span>
+          </div>
+
+          <div className="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-600">
+            <div
+              className={cn(
+                "absolute left-0 top-0 h-full rounded-full bg-gradient-to-r transition-all duration-700",
+                DUE_STATUS_BAR[dueDateInfo.status]
+              )}
+              style={{ width: `${dueDateInfo.progressPercent}%` }}
+            />
+            {dueDateInfo.status !== "overdue" && dueDateInfo.progressPercent < 100 ? (
+              <div
+                className="absolute top-0 h-full w-8 rounded-full bg-white/40"
+                style={{
+                  left: `${Math.max(dueDateInfo.progressPercent - 8, 0)}%`,
+                  animation: "shimmerBar 2s ease-in-out infinite",
+                }}
+              />
+            ) : null}
+          </div>
+
+          <div className="mt-1 flex justify-between">
+            <span className="text-[10px] text-gray-400">
+              {new Date(tx.created_at).toLocaleDateString(localeTag, {
+                day: "numeric",
+                month: "short",
+              })}
+            </span>
+            <span className="text-[10px] text-gray-400">
+              {dueDateInfo.totalDays > 0
+                ? t("debtCredit.dueDuration", { days: dueDateInfo.totalDays })
+                : ""}
+            </span>
+          </div>
         </div>
-        <div className={`mt-0.5 text-xs ${tx.is_paid ? "text-green-600" : "text-gray-400"}`}>
-          {tx.is_paid ? `✅ ${t("debtCredit.paid")}` : `⏳ ${t("debtCredit.pending")}`}
-        </div>
-      </div>
-      <div className="flex shrink-0 gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
-        {!tx.is_paid ? (
+      ) : null}
+
+      {dueDateInfo?.status === "overdue" && !tx.is_paid ? (
+        <div className="mx-4 mb-3 flex items-center justify-between gap-2 rounded-xl border border-red-200 bg-red-100 px-3 py-2 dark:border-red-800 dark:bg-red-900/30">
+          <span className="text-xs font-bold text-red-700 dark:text-red-400">
+            ⛔{" "}
+            {t("debtCredit.dueOverdueBanner", { days: Math.abs(dueDateInfo.remainingDays) })}
+          </span>
           <button
             type="button"
             onClick={() => onMarkPaid(tx.id)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50 text-sm text-green-600 transition-all hover:bg-green-100 dark:bg-green-900/30 dark:hover:bg-green-900/50"
-            title={t("debtCredit.markPaid")}
+            className="shrink-0 rounded-lg bg-red-600 px-3 py-1 text-xs font-bold text-white"
           >
-            ✓
+            {t("debtCredit.markPaid")}
           </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => onEdit(tx)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-sm text-blue-600 transition-all hover:bg-blue-100 dark:bg-blue-900/30"
-          title={t("common.edit")}
-        >
-          ✏️
-        </button>
-        <button
-          type="button"
-          onClick={() => onDelete(tx.id)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-sm text-red-500 transition-all hover:bg-red-100 dark:bg-red-900/30"
-          title={t("common.delete")}
-        >
-          🗑️
-        </button>
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -281,7 +432,9 @@ function EditDebtModal({
           />
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">Kişi</label>
+            <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">
+              Kişi <span className="font-normal text-gray-400">(opsiyonel)</span>
+            </label>
             {!showNewContact ? (
               <div className="flex gap-2">
                 <select
@@ -490,6 +643,18 @@ export default function AlacakVerecekPage() {
     [transactions]
   );
 
+  const urgentDueCount = useMemo(() => {
+    return transactions.filter((tx) => {
+      if (tx.category !== "alacak" && tx.category !== "verecek") return false;
+      if (tx.is_paid || !tx.due_date) return false;
+      const d = String(tx.due_date).slice(0, 10);
+      const end = new Date(`${d}T12:00:00`).getTime();
+      if (Number.isNaN(end)) return false;
+      const days = Math.ceil((end - Date.now()) / 86400000);
+      return days <= 7;
+    }).length;
+  }, [transactions]);
+
   const detailTx = useMemo(() => {
     if (!detail) return [];
     return transactions
@@ -696,25 +861,28 @@ export default function AlacakVerecekPage() {
   const submitDebt = async () => {
     if (!debtModal) return;
     const name = personName.trim();
-    if (name.length < 2) {
-      errToast("Kişi adı gerekli");
-      return;
-    }
     const n = parseAmount(amountStr);
     if (n <= 0) {
       errToast("Geçerli tutar girin");
       return;
     }
+    if (!desc.trim() && name.length < 2) {
+      errToast("Açıklama girin veya kişi adı yazın");
+      return;
+    }
     setSavingDebt(true);
-    let contact_id = resolveContactId(contacts, name);
-    if (!contact_id) {
-      const { error, data } = await addContact({ name, phone: null });
-      if (error || !data) {
-        errToast(error ?? "Kişi eklenemedi");
-        setSavingDebt(false);
-        return;
+    let contact_id: string | null = null;
+    if (name.length >= 2) {
+      contact_id = resolveContactId(contacts, name);
+      if (!contact_id) {
+        const { error, data } = await addContact({ name, phone: null });
+        if (error || !data) {
+          errToast(error ?? "Kişi eklenemedi");
+          setSavingDebt(false);
+          return;
+        }
+        contact_id = data.id;
       }
-      contact_id = data.id;
     }
     const category: TransactionCategory = debtModal === "alacak" ? "alacak" : "verecek";
     const supabase = createClient();
@@ -842,6 +1010,17 @@ export default function AlacakVerecekPage() {
           </div>
         </div>
       </div>
+
+      {urgentDueCount > 0 ? (
+        <div className="flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 dark:border-orange-800 dark:bg-orange-900/20">
+          <span className="text-lg" aria-hidden>
+            ⚠️
+          </span>
+          <span className="text-sm font-semibold text-orange-700 dark:text-orange-400">
+            {t("debtCredit.dueUrgentSummary", { count: urgentDueCount })}
+          </span>
+        </div>
+      ) : null}
 
       <div
         className={cn(
@@ -978,7 +1157,7 @@ export default function AlacakVerecekPage() {
         <div className="space-y-4">
           <div className="relative">
             <Input
-              label="Kişi adı"
+              label="Kişi adı (opsiyonel)"
               value={personName}
               onChange={(e) => setPersonName(e.target.value)}
               placeholder="Örn. Ali Yılmaz"

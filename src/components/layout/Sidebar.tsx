@@ -28,7 +28,6 @@ export function Sidebar() {
     { href: "/islemler", label: t("nav.transactions"), emoji: "💸" },
     { href: "/alacak-verecek", label: t("nav.debtCredit"), emoji: "👥" },
     { href: "/odemeler", label: t("nav.payments"), emoji: "💳" },
-    { href: "/rapor", label: t("nav.report"), emoji: "📊" },
     { href: "/profil", label: t("nav.profile"), emoji: "👤" },
   ];
 
@@ -83,13 +82,20 @@ export function Sidebar() {
         </nav>
         <div className="border-t border-black/[0.06] p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--sd-primary)_15%,white)] text-sm font-extrabold text-[var(--sd-primary)]">
+            <div
+              suppressHydrationWarning
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--sd-primary)_15%,white)] text-sm font-extrabold text-[var(--sd-primary)]"
+            >
               {initialsFromEmailOrName(display)}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-bold text-[var(--text-primary)]">{display}</p>
+              <p suppressHydrationWarning className="truncate text-sm font-bold text-[var(--text-primary)]">
+                {display}
+              </p>
               {email ? (
-                <p className="truncate text-xs font-medium text-[var(--text-secondary)]">{email}</p>
+                <p suppressHydrationWarning className="truncate text-xs font-medium text-[var(--text-secondary)]">
+                  {email}
+                </p>
               ) : null}
             </div>
           </div>

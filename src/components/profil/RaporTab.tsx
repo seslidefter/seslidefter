@@ -11,10 +11,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { SmartPredictions } from "@/components/ai/SmartPredictions";
 import { CategoryChart, type CategorySlice } from "@/components/rapor/CategoryChart";
 import { TrendChart, type TrendMonthRow } from "@/components/rapor/TrendChart";
-import { PageShell } from "@/components/layout/PageShell";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { errToast } from "@/lib/sd-toast";
@@ -23,7 +21,7 @@ import { formatTry } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuthStore } from "@/store/authStore";
 import { useTransactionStore } from "@/store/transactionStore";
-import { AlacakVerecekBar, GelirGiderArea, type AvPoint, type TrendPoint } from "./charts";
+import { AlacakVerecekBar, GelirGiderArea, type AvPoint, type TrendPoint } from "@/app/(app)/rapor/charts";
 
 type Period = "week" | "month" | "3m" | "6m" | "year";
 
@@ -62,7 +60,7 @@ function monthKey(iso: string) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export function RaporPageClient() {
+export function RaporTab() {
   const { t, language } = useLanguage();
   const dateLocale = language === "en" ? "en-US" : "tr-TR";
   const initialized = useAuthStore((s) => s.initialized);
@@ -273,27 +271,17 @@ export function RaporPageClient() {
 
   if (!initialized || (loading && transactions.length === 0)) {
     return (
-      <PageShell
-        title={t("report.title")}
-        variant="narrow"
-        contentClassName="flex flex-col gap-4"
-        titleClassName="hidden md:block"
-      >
+      <div className="flex flex-col gap-4 py-1">
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-64 w-full rounded-2xl" />
-      </PageShell>
+      </div>
     );
   }
 
   const trendHasData = trendLast6Months.some((r) => r.gelir > 0 || r.gider > 0);
 
   return (
-    <PageShell
-      title={t("report.title")}
-      variant="narrow"
-      contentClassName="flex flex-col gap-5 pb-6"
-      titleClassName="hidden md:block"
-    >
+    <div className="flex flex-col gap-5 pb-2">
       <div className="flex flex-wrap gap-2">
         {PERIOD_BTN.map((p) => (
           <button
@@ -316,11 +304,6 @@ export function RaporPageClient() {
           </button>
         ))}
       </div>
-
-      <section className="space-y-2">
-        <h2 className="sd-heading text-lg text-[var(--text-primary)]">{t("report.smartAnalysis")}</h2>
-        <SmartPredictions transactions={transactions} />
-      </section>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="p-4">
@@ -573,6 +556,6 @@ export function RaporPageClient() {
           <AlacakVerecekBar data={barData} />
         )}
       </Card>
-    </PageShell>
+    </div>
   );
 }

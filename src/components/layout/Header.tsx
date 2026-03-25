@@ -28,7 +28,10 @@ export function Header() {
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold capitalize text-[var(--text-secondary)] md:text-base">
+          <p
+            suppressHydrationWarning
+            className="text-sm font-semibold capitalize text-[var(--text-secondary)] md:text-base"
+          >
             {dateLine}
           </p>
         </div>

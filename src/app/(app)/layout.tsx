@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { AIAssistant } from "@/components/ai/AIAssistant";
 import { Header } from "@/components/layout/Header";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -22,7 +21,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </main>
       </div>
       <MobileNav />
-      <AIAssistant />
     </div>
   );
 }
