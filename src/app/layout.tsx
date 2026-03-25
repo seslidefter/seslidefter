@@ -1,6 +1,8 @@
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/providers/Toaster";
+import { MicrophonePermission } from "@/components/ui/MicrophonePermission";
+import { PageTransition } from "@/components/ui/PageTransition";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -63,6 +65,8 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <LanguageProvider>
+              <PageTransition />
+              <MicrophonePermission />
               {children}
               <Toaster />
             </LanguageProvider>

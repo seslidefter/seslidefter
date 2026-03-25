@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { generateLocalFinancialReply } from "@/lib/financial-ai-local";
 import { createClient } from "@/lib/supabase/server";
 
+export const runtime = "edge";
+export const dynamic = "force-dynamic";
+
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(userId: string, limit: number, windowMs: number): boolean {

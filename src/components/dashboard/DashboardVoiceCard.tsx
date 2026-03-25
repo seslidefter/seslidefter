@@ -142,15 +142,25 @@ export function DashboardVoiceCard() {
   }, [clearSilence, trySaveText]);
 
   const startRecognition = useCallback(() => {
+    void (async () => {
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      toast.error("Mikrofon izni gerekli. Tarayıcı ayarlarından izin verin.");
+      return;
+    }
+
     const w = window as unknown as {
       SpeechRecognition?: SpeechRecognitionConstructor;
       webkitSpeechRecognition?: SpeechRecognitionConstructor;
     };
     const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
     if (!Ctor) {
-      toast.error("❌ Bu tarayıcıda ses tanıma yok.");
+      toast.error("Tarayıcınız ses tanımayı desteklemiyor. Chrome veya Safari kullanın.");
       return;
     }
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
     manualStopRef.current = false;
     finalBufRef.current = "";
@@ -159,9 +169,10 @@ export function DashboardVoiceCard() {
     setIsRecording(true);
 
     const rec = new Ctor();
-    rec.continuous = true;
+    rec.continuous = !isIOS;
     rec.interimResults = true;
     rec.lang = "tr-TR";
+    rec.maxAlternatives = 1;
     recognitionRef.current = rec;
 
     rec.onresult = (event: SpeechRecognitionEvent) => {
@@ -181,19 +192,44 @@ export function DashboardVoiceCard() {
       const display = [finalText, interim].filter(Boolean).join(" ").trim();
       setLiveLine(display || "…");
 
-      silenceTimerRef.current = setTimeout(() => {
-        try {
-          rec.stop();
-        } catch (e) {
-          console.error("[voice] silence stop", e);
-        }
-      }, 2000);
+      if (!isIOS) {
+        silenceTimerRef.current = setTimeout(() => {
+          try {
+            rec.stop();
+          } catch (e) {
+            console.error("[voice] silence stop", e);
+          }
+        }, 2000);
+      }
     };
 
     rec.onerror = (ev: SpeechRecognitionErrorEvent) => {
       console.error("[voice] recognition error", ev.error);
-      if (ev.error === "not-allowed") {
-        toast.error("❌ Mikrofon izni gerekli");
+      switch (ev.error) {
+        case "no-speech":
+          toast.error("Ses algılanamadı. Tekrar deneyin.");
+          break;
+        case "audio-capture":
+          toast.error("Mikrofon erişilemiyor. İzin verin.");
+          break;
+        case "not-allowed":
+          toast.error("Mikrofon izni reddedildi. Ayarlardan izin verin.");
+          break;
+        case "network":
+          toast.error("İnternet bağlantısı gerekli.");
+          break;
+        case "language-not-supported":
+          rec.lang = "en-US";
+          try {
+            rec.start();
+          } catch (e) {
+            console.error("[voice] lang fallback start", e);
+            toast.error("Ses tanıma başlatılamadı.");
+            setIsRecording(false);
+          }
+          return;
+        default:
+          toast.error(`Ses hatası: ${ev.error}`);
       }
     };
 
@@ -205,9 +241,10 @@ export function DashboardVoiceCard() {
       rec.start();
     } catch (e) {
       console.error("[voice] start", e);
-      toast.error("❌ Mikrofon başlatılamadı");
+      toast.error("Kayıt başlatılamadı. Tekrar deneyin.");
       setIsRecording(false);
     }
+    })();
   }, [clearSilence, onRecognitionEnd]);
 
   const toggleRecording = useCallback(() => {

@@ -1,57 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { getSupabaseClient } from "@/lib/supabase/client";
-
-type PlanPaymentRow = {
-  id: string;
-  amount: number;
-  due_date: string;
-  payment_plans: { title: string; icon: string } | null;
-};
+import { useTransactionStore } from "@/store/transactionStore";
 
 export function UpcomingPlanPayments() {
-  const [rows, setRows] = useState<PlanPaymentRow[]>([]);
-
-  const load = useCallback(async () => {
-    const supabase = getSupabaseClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setRows([]);
-      return;
-    }
-
-    const end = new Date();
-    end.setDate(end.getDate() + 30);
-    const endStr = end.toISOString().split("T")[0];
-    const start = new Date();
-    start.setDate(start.getDate() - 14);
-    const startStr = start.toISOString().split("T")[0];
-
-    const { data, error } = await supabase
-      .from("payment_plan_payments")
-      .select("id, amount, due_date, payment_plans(title, icon)")
-      .eq("user_id", user.id)
-      .eq("is_paid", false)
-      .gte("due_date", startStr)
-      .lte("due_date", endStr)
-      .order("due_date", { ascending: true })
-      .limit(5);
-
-    if (error) {
-      console.warn("[UpcomingPlanPayments]", error.message);
-      setRows([]);
-      return;
-    }
-
-    setRows((data ?? []) as PlanPaymentRow[]);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const rows = useTransactionStore((s) => s.upcomingPlanPayments);
 
   if (rows.length === 0) return null;
 

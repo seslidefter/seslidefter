@@ -56,3 +56,13 @@ export interface TransactionRow {
   plan_id?: string | null;
   contacts?: { name: string; phone?: string | null } | null;
 }
+
+/** Yaklaşan plan ödemeleri (payment_plan_payments + ilişkili plan) */
+export interface PlanPaymentRow {
+  id: string;
+  amount: number;
+  due_date: string;
+  installment_number?: number | null;
+  plan_id?: string | null;
+  payment_plans: { title: string; icon: string } | null;
+}

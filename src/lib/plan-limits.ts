@@ -28,6 +28,22 @@ export const PREMIUM_LIMITS = {
 
 export type PlanKind = "free" | "premium";
 
+export interface PlanLimits {
+  plan: "free" | "premium";
+  isPremium: boolean;
+  premiumUntil: Date | null;
+  monthlyUsed: number;
+  monthlyLimit: number;
+  usagePercent: number;
+  isLimitReached: boolean;
+  contactsUsed: number;
+  paymentPlansUsed: number;
+  aiQueriesUsed: number;
+  limits: typeof FREE_LIMITS | typeof PREMIUM_LIMITS;
+  daysRemaining: number | null;
+  joinDate: Date;
+}
+
 export interface MonthlyLimitCheck {
   ok: boolean;
   isPremium: boolean;

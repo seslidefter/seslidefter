@@ -101,6 +101,7 @@ export function MobileNav() {
               <Link
                 key={href}
                 href={href}
+                prefetch
                 className={cn(
                   "relative flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-bold transition-colors duration-200",
                   isActive ? "text-[var(--sd-primary)]" : "text-[var(--text-secondary)]"
@@ -140,6 +141,7 @@ export function MobileNav() {
               <Link
                 key={href}
                 href={href}
+                prefetch
                 className={cn(
                   "flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-bold transition-colors duration-200",
                   active ? "text-[var(--sd-primary)]" : "text-[var(--text-secondary)]"

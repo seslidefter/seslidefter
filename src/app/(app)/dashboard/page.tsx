@@ -47,7 +47,7 @@ function DashboardInner() {
   const loading = useTransactionStore((s) => s.loading);
   const fetchAll = useTransactionStore((s) => s.fetchAll);
   const loadTx = useCallback(() => {
-    void fetchAll().then((r) => {
+    void fetchAll({ withDashboardExtras: true }).then((r) => {
       if (r.error) errToast(r.error);
     });
   }, [fetchAll]);
@@ -87,10 +87,16 @@ function DashboardInner() {
   if (loading && transactions.length === 0) {
     return (
       <PageShell variant="wide" contentClassName="flex flex-col gap-4 pb-28">
-        <Skeleton className="h-44 w-full rounded-2xl" />
-        <div className="grid grid-cols-2 gap-3">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-24 rounded-2xl" />
+        <div className="animate-pulse space-y-4">
+          <div className="h-36 rounded-2xl bg-green-100 dark:bg-green-900/20" />
+          <div className="grid grid-cols-2 gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-20 rounded-2xl bg-[var(--bg-secondary)] dark:bg-gray-800" />
+            ))}
+          </div>
+          <div className="h-6 w-32 rounded-lg bg-[var(--bg-secondary)] dark:bg-gray-800" />
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="mb-2 h-16 rounded-xl bg-[var(--bg-secondary)] dark:bg-gray-800" />
           ))}
         </div>
       </PageShell>

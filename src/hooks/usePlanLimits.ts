@@ -1,28 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { computePlanLimits } from "@/lib/compute-plan-limits";
 import { createClient } from "@/lib/supabase/client";
-import { FREE_LIMITS, PREMIUM_LIMITS } from "@/lib/plan-limits";
+import { FREE_LIMITS, PREMIUM_LIMITS, type PlanLimits } from "@/lib/plan-limits";
+import { useTransactionStore } from "@/store/transactionStore";
 
-export { FREE_LIMITS, PREMIUM_LIMITS } from "@/lib/plan-limits";
-
-export interface PlanLimits {
-  plan: "free" | "premium";
-  isPremium: boolean;
-  premiumUntil: Date | null;
-  monthlyUsed: number;
-  monthlyLimit: number;
-  usagePercent: number;
-  isLimitReached: boolean;
-  contactsUsed: number;
-  paymentPlansUsed: number;
-  aiQueriesUsed: number;
-  limits: typeof FREE_LIMITS | typeof PREMIUM_LIMITS;
-  daysRemaining: number | null;
-  joinDate: Date;
-}
+export { FREE_LIMITS, PREMIUM_LIMITS, type PlanLimits } from "@/lib/plan-limits";
 
 export function usePlanLimits() {
+  const pathname = usePathname();
+  const planLimitsPrefetch = useTransactionStore((s) => s.planLimitsPrefetch);
+  const txLoading = useTransactionStore((s) => s.loading);
   const [planData, setPlanData] = useState<PlanLimits | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -52,48 +42,42 @@ export function usePlanLimits() {
     ]);
 
     const paymentPlansUsed = planCountRes.error ? 0 : (planCountRes.count ?? 0);
-
     const profile = profileRes.data as
       | { plan?: string | null; premium_until?: string | null; created_at?: string }
       | null
       | undefined;
-    const premiumUntil = profile?.premium_until ? new Date(profile.premium_until) : null;
-    const isPremium =
-      (premiumUntil != null && premiumUntil.getTime() > now.getTime()) || profile?.plan === "premium";
-    const limits = isPremium ? PREMIUM_LIMITS : FREE_LIMITS;
+
     const monthlyUsed = txCountRes.count ?? 0;
-    const monthlyLimit = limits.monthlyTransactions;
-    const daysRemaining =
-      premiumUntil && premiumUntil.getTime() > now.getTime()
-        ? Math.ceil((premiumUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-        : null;
+    const contactsUsed = contactCountRes.count ?? 0;
 
-    const usagePercent =
-      monthlyLimit === Number.POSITIVE_INFINITY
-        ? 0
-        : Math.min((monthlyUsed / monthlyLimit) * 100, 100);
-
-    setPlanData({
-      plan: isPremium ? "premium" : "free",
-      isPremium,
-      premiumUntil,
-      monthlyUsed,
-      monthlyLimit: monthlyLimit === Number.POSITIVE_INFINITY ? 999_999 : monthlyLimit,
-      usagePercent,
-      isLimitReached: !isPremium && monthlyUsed >= FREE_LIMITS.monthlyTransactions,
-      contactsUsed: contactCountRes.count ?? 0,
-      paymentPlansUsed,
-      aiQueriesUsed: 0,
-      limits,
-      daysRemaining,
-      joinDate: profile?.created_at ? new Date(profile.created_at) : now,
-    });
+    setPlanData(
+      computePlanLimits(profile ?? null, monthlyUsed, contactsUsed, paymentPlansUsed, now)
+    );
     setLoading(false);
   }, []);
 
   useEffect(() => {
+    if (pathname?.startsWith("/profil")) {
+      setLoading(true);
+      void loadPlanData();
+      return;
+    }
+    const onDashboard = pathname === "/dashboard" || pathname?.startsWith("/dashboard/");
+    if (onDashboard) {
+      if (planLimitsPrefetch) {
+        setPlanData(planLimitsPrefetch);
+        setLoading(false);
+        return;
+      }
+      if (txLoading) {
+        setLoading(true);
+        return;
+      }
+      void loadPlanData();
+      return;
+    }
     void loadPlanData();
-  }, [loadPlanData]);
+  }, [pathname, planLimitsPrefetch, txLoading, loadPlanData]);
 
   return { planData, loading, refresh: loadPlanData };
 }

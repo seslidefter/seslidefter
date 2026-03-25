@@ -45,7 +45,7 @@ export function Sidebar() {
       style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}
     >
       <div className="flex h-full flex-col">
-        <Link href="/dashboard" className="sidebar-logo block border-b border-white/10">
+        <Link href="/dashboard" prefetch className="sidebar-logo block border-b border-white/10">
           <div className="logo-bg">
             <div className="deco-circle deco-1" />
             <div className="deco-circle deco-2" />
@@ -65,6 +65,7 @@ export function Sidebar() {
               <Link
                 key={href}
                 href={href}
+                prefetch
                 className={cn(
                   "flex items-center gap-3 rounded-xl border-l-[3px] border-transparent py-3 pl-4 pr-3 text-sm font-bold transition-all duration-200",
                   active

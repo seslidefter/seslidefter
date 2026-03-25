@@ -27,7 +27,15 @@ const nextConfig: NextConfig = {
             value: "camera=(), microphone=(self), geolocation=()",
           },
           { key: "X-XSS-Protection", value: "1; mode=block" },
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
         ],
+      },
+      {
+        source: "/(dashboard|islemler|alacak-verecek|odemeler|rapor|profil)",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
       },
     ];
   },

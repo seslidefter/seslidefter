@@ -8,12 +8,15 @@ import {
   sanitizeDate,
   sanitizeOptionalDate,
 } from "@/lib/security";
+import { computePlanLimits } from "@/lib/compute-plan-limits";
 import type {
   ContactRow,
+  PlanPaymentRow,
   RecurringOption,
   TransactionCategory,
   TransactionRow,
 } from "@/types/database";
+import type { PlanLimits } from "@/lib/plan-limits";
 
 export interface AddTransactionPayload {
   contact_id?: string | null;
@@ -30,11 +33,18 @@ export interface AddTransactionPayload {
   recurring_end?: string | null;
 }
 
+export interface FetchAllOptions {
+  /** Dashboard: tek round-trip ile plan ödemeleri + kullanım limitleri */
+  withDashboardExtras?: boolean;
+}
+
 interface TransactionState {
   transactions: TransactionRow[];
   contacts: ContactRow[];
+  upcomingPlanPayments: PlanPaymentRow[];
+  planLimitsPrefetch: PlanLimits | null;
   loading: boolean;
-  fetchAll: () => Promise<{ error: string | null }>;
+  fetchAll: (opts?: FetchAllOptions) => Promise<{ error: string | null }>;
   addTransaction: (payload: AddTransactionPayload) => Promise<{ error: string | null }>;
   updateTransaction: (
     id: string,
@@ -142,30 +152,107 @@ function mapTransactionRow(
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   transactions: [],
   contacts: [],
+  upcomingPlanPayments: [],
+  planLimitsPrefetch: null,
   loading: false,
 
-  fetchAll: async () => {
+  fetchAll: async (opts?: FetchAllOptions) => {
     const supabase = createClient();
+    const withEx = opts?.withDashboardExtras ?? false;
     set({ loading: true });
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      set({ loading: false, transactions: [], contacts: [] });
+      set({
+        loading: false,
+        transactions: [],
+        contacts: [],
+        upcomingPlanPayments: [],
+        planLimitsPrefetch: null,
+      });
       return { error: "Oturum yok" };
     }
 
-    const [txRes, cRes] = await Promise.all([
+    const txQ = supabase
+      .from("transactions")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+    const contactsQ = supabase
+      .from("contacts")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("name", { ascending: true });
+
+    if (!withEx) {
+      const [txRes, cRes] = await Promise.all([txQ, contactsQ]);
+
+      if (txRes.error) {
+        console.error("[fetchAll] transactions", txRes.error);
+        set({ loading: false });
+        return { error: txRes.error.message };
+      }
+      if (cRes.error) {
+        console.error("[fetchAll] contacts", cRes.error);
+        set({ loading: false });
+        return { error: cRes.error.message };
+      }
+
+      const contactMap = new Map<string, { name: string; phone: string | null }>(
+        (cRes.data ?? []).map((c: ContactRow) => [c.id, { name: c.name, phone: c.phone ?? null }])
+      );
+      const merged: TransactionRow[] = (txRes.data ?? []).map((t: Record<string, unknown>) =>
+        mapTransactionRow(t, contactMap)
+      );
+
+      set({
+        transactions: merged,
+        contacts: (cRes.data ?? []) as ContactRow[],
+        upcomingPlanPayments: [],
+        planLimitsPrefetch: null,
+        loading: false,
+      });
+      return { error: null };
+    }
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const end = new Date();
+    end.setDate(end.getDate() + 30);
+    const endStr = end.toISOString().split("T")[0];
+    const start = new Date();
+    start.setDate(start.getDate() - 14);
+    const startStr = start.toISOString().split("T")[0];
+
+    const [
+      txRes,
+      cRes,
+      planPayRes,
+      profileRes,
+      txCountRes,
+      contactCountRes,
+      planCountRes,
+    ] = await Promise.all([
+      txQ,
+      contactsQ,
+      supabase
+        .from("payment_plan_payments")
+        .select("id, amount, due_date, payment_plans(title, icon)")
+        .eq("user_id", user.id)
+        .eq("is_paid", false)
+        .gte("due_date", startStr)
+        .lte("due_date", endStr)
+        .order("due_date", { ascending: true })
+        .limit(5),
+      supabase.from("profiles").select("plan, premium_until, created_at").eq("id", user.id).maybeSingle(),
       supabase
         .from("transactions")
-        .select("*")
+        .select("id", { count: "exact", head: true })
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("contacts")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("name", { ascending: true }),
+        .gte("created_at", monthStart),
+      supabase.from("contacts").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+      supabase.from("payment_plans").select("id", { count: "exact", head: true }).eq("user_id", user.id),
     ]);
 
     if (txRes.error) {
@@ -178,6 +265,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       set({ loading: false });
       return { error: cRes.error.message };
     }
+    if (planPayRes.error) {
+      console.warn("[fetchAll] payment_plan_payments", planPayRes.error.message);
+    }
 
     const contactMap = new Map<string, { name: string; phone: string | null }>(
       (cRes.data ?? []).map((c: ContactRow) => [c.id, { name: c.name, phone: c.phone ?? null }])
@@ -186,9 +276,26 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       mapTransactionRow(t, contactMap)
     );
 
+    const profile = profileRes.data as
+      | { plan?: string | null; premium_until?: string | null; created_at?: string }
+      | null
+      | undefined;
+    const monthlyUsed = txCountRes.count ?? 0;
+    const contactsUsed = contactCountRes.count ?? 0;
+    const paymentPlansUsed = planCountRes.error ? 0 : (planCountRes.count ?? 0);
+    const planLimitsPrefetch = computePlanLimits(
+      profile ?? null,
+      monthlyUsed,
+      contactsUsed,
+      paymentPlansUsed,
+      now
+    );
+
     set({
       transactions: merged,
       contacts: (cRes.data ?? []) as ContactRow[],
+      upcomingPlanPayments: (planPayRes.data ?? []) as PlanPaymentRow[],
+      planLimitsPrefetch,
       loading: false,
     });
     return { error: null };
